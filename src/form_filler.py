@@ -489,30 +489,120 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
 
         return False
 
+    def bring_window_to_foreground(self):
+        """Forces the Chrome window to the absolute front of the Windows desktop."""
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            def enum_handler(hwnd, extra):
+                if user32.IsWindowVisible(hwnd):
+                    length = user32.GetWindowTextLengthW(hwnd)
+                    buff = ctypes.create_unicode_buffer(length + 1)
+                    user32.GetWindowTextW(hwnd, buff, length + 1)
+                    title = buff.value
+                    if title and any(k.lower() in title.lower() for k in ["chrome", "google", "form", "apply", "mock", "placement", "jobbot"]):
+                        user32.ShowWindow(hwnd, 3) # SW_MAXIMIZE
+                        user32.SetForegroundWindow(hwnd)
+                        try:
+                            user32.SwitchToThisWindow(hwnd, True)
+                        except Exception:
+                            pass
+                return True
+
+            WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+            user32.EnumWindows(WNDENUMPROC(enum_handler), 0)
+        except Exception:
+            pass
+
+    def inject_debug_banner(self, page: Page):
+        """Injects a high-visibility Xbox neon banner inside the browser page confirming Debug Mode."""
+        try:
+            banner_js = """
+            if (!document.getElementById('jobbot-debug-banner')) {
+                const b = document.createElement('div');
+                b.id = 'jobbot-debug-banner';
+                b.style.position = 'fixed';
+                b.style.top = '0';
+                b.style.left = '0';
+                b.style.right = '0';
+                b.style.backgroundColor = '#107c10';
+                b.style.color = '#ffffff';
+                b.style.fontFamily = 'Segoe UI, sans-serif';
+                b.style.fontWeight = 'bold';
+                b.style.fontSize = '14px';
+                b.style.textAlign = 'center';
+                b.style.padding = '12px 20px';
+                b.style.zIndex = '99999999';
+                b.style.boxShadow = '0 4px 25px rgba(16, 124, 16, 0.7)';
+                b.style.borderBottom = '2px solid #2ecc71';
+                b.innerHTML = '🛡️ <strong>JOBBOT DEBUG MODE:</strong> All fields filled by AI! (Final Submit is paused for inspection — will NOT click Apply)';
+                document.body.prepend(b);
+            }
+            """
+            page.evaluate(banner_js)
+        except Exception:
+            pass
+
     def apply_to_job(self, apply_url: str, company: str = "Unknown", role: str = "Unknown", auto_submit: bool = False, headless: bool = False):
         """
         End-to-End Multi-Page Job Application Engine.
-        Opens a VISIBLE Chrome window so you can watch Gemini work live!
+        Opens a REAL VISIBLE Google Chrome window so you can watch Gemini work live!
         """
         print(f"\n=======================================================")
         print(f"⚡ PROCESSING APPLICATION: {company} - {role}")
         print(f"🌐 URL: {apply_url}")
-        print(f"⚙️ Auto-Submit: {'ON (Instant Apply)' if auto_submit else 'OFF (Review Mode)'}")
-        print(f"🖥️ Mode: {'Visible Chrome Window' if not headless else 'Silent Background'}")
+        print(f"⚙️ Auto-Submit: {'ON (Instant Apply)' if auto_submit else 'OFF (Review Mode - Will NOT Submit)'}")
+        print(f"🖥️ Mode: {'Visible Real Chrome Window' if not headless else 'Silent Background'}")
         print(f"=======================================================")
 
         with sync_playwright() as p:
-            # Opens a real visible Chrome browser window on your screen
-            browser = p.chromium.launch(
-                headless=headless,
-                args=["--start-maximized", "--disable-blink-features=AutomationControlled"]
-            )
+            # Opens real visible Google Chrome with clean independent context (zero lock conflicts)
+            try:
+                browser = p.chromium.launch(
+                    channel="chrome",
+                    headless=headless,
+                    slow_mo=90,
+                    args=[
+                        "--start-maximized",
+                        "--new-window",
+                        "--disable-blink-features=AutomationControlled",
+                        "--no-first-run",
+                        "--no-default-browser-check"
+                    ]
+                )
+            except Exception as e:
+                print(f"[Notice falling back to bundled Chromium]: {e}")
+                browser = p.chromium.launch(
+                    headless=headless,
+                    slow_mo=90,
+                    args=["--start-maximized", "--new-window"]
+                )
+
             context = browser.new_context(viewport=None, no_viewport=True)
             page = context.new_page()
+            page.bring_to_front()
+            self.bring_window_to_foreground()
 
             try:
                 page.goto(apply_url, timeout=60000, wait_until="domcontentloaded")
                 time.sleep(3)
+                self.bring_window_to_foreground()
+                self.inject_debug_banner(page)
+
+                # Check if this form requires Google Account Sign-In (e.g. VIT Bhopal forms)
+                if "accounts.google.com" in page.url:
+                    print("\n🔑 [GOOGLE ACCOUNT SIGN-IN REQUIRED FOR THIS FORM]")
+                    print("👉 Please sign into your VIT Bhopal Google Account in the open Chrome window.")
+                    print("🔔 Chime sounded! Waiting up to 60 seconds for you to sign in...")
+                    self.notify_user_alert()
+                    for _ in range(60):
+                        if "accounts.google.com" not in page.url:
+                            print("✅ Google Sign-in detected! Resuming form filler...")
+                            time.sleep(3)
+                            break
+                        time.sleep(1)
 
                 # Check for initial "Apply", "Upload resume", or "Register" buttons on career portals
                 apply_trigger = page.query_selector(
@@ -553,6 +643,7 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
                             time.sleep(1)
 
                     print(f"\n--- [Page {page_num}] Scanning Form Elements ---")
+                    self.inject_debug_banner(page)
                     filled = self.fill_current_page_fields(page, resume_path=selected_resume)
 
                     # Self-Healing: If 0 fields detected on initial page, consult Gemini!
@@ -575,6 +666,7 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
                     # If this is the final submit step
                     if submit_btn and (not next_btn or page_num > 1):
                         print("\n🎯 Reached the Final Submit Step!")
+                        self.inject_debug_banner(page)
                         if auto_submit:
                             print("Auto-Submit is ON. Submitting Application...")
                             submit_btn.scroll_into_view_if_needed()
@@ -583,12 +675,14 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
                             self.log_application(company, role, apply_url, "SUBMITTED", f"Auto-submitted with {selected_resume.name}")
                             print("✅ APPLICATION SUBMITTED SUCCESSFULLY!")
                         else:
-                            print("\n>>> 🛡️ REVIEW MODE ACTIVE: Everything has been filled.")
+                            print("\n>>> 🛡️ DEBUG REVIEW MODE ACTIVE: Everything has been filled.")
                             print(f">>> Attached Tailored Resume: {selected_resume.name}")
-                            print(">>> The browser will stay open for 30 seconds.")
-                            print(">>> Glance at the form and click Submit!")
-                            time.sleep(30)
-                            self.log_application(company, role, apply_url, "REVIEWED_AND_FILLED", f"Filled with {selected_resume.name}")
+                            print(">>> 🛑 Submit button was deliberately NOT clicked as instructed (debugging phase).")
+                            print(">>> The real Chrome window will stay open for 60 seconds so you can review!")
+                            self.bring_window_to_foreground()
+                            self.notify_user_alert()
+                            time.sleep(60)
+                            self.log_application(company, role, apply_url, "REVIEWED_AND_FILLED", f"Filled with {selected_resume.name} (Submit paused)")
                         break
                     elif next_btn:
                         print(f"Advancing from Page {page_num} to Page {page_num + 1}...")
@@ -597,6 +691,8 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
                         time.sleep(3)
                     else:
                         print("No further 'Next' or 'Submit' buttons detected. Application completed.")
+                        self.inject_debug_banner(page)
+                        time.sleep(30)
                         self.log_application(company, role, apply_url, "COMPLETED", f"No next button, used {selected_resume.name}")
                         break
 

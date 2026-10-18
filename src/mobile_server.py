@@ -34,7 +34,7 @@ bot_state = {
     "current_status": "Idle",
     "stop_requested": False,
     "last_run_time": None,
-    "auto_submit": True,
+    "auto_submit": False,  # STRICT DEBUG MODE: Never submit forms automatically
     "stats": {
         "applied_count": 0,
         "failed_count": 0
@@ -122,8 +122,8 @@ def bot_worker_loop():
                         company = job.get("company", "Placement Company")
                         role = job.get("role", "Software Role")
                         url = job.get("apply_url")
-                        auto_sub = bot_state.get("auto_submit", True)
-                        filler.apply_to_job(apply_url=url, company=company, role=role, auto_submit=auto_sub)
+                        # Debugging mode: strictly False
+                        filler.apply_to_job(apply_url=url, company=company, role=role, auto_submit=False)
                         bot_state["stats"]["applied_count"] += 1
                 else:
                     bot_state["current_status"] = f"Inbox clear. Listening for '{subject_to_search}'..."
@@ -332,18 +332,18 @@ async def quick_apply(request: Request):
         try:
             from form_filler import AIFormFiller
             filler = AIFormFiller()
-            auto_sub = data.get("auto_submit", bot_state.get("auto_submit", True))
-            filler.apply_to_job(apply_url=url, company=company, role=role, auto_submit=auto_sub)
+            # Strictly False in debugging mode
+            filler.apply_to_job(apply_url=url, company=company, role=role, auto_submit=False)
         except Exception as e:
             print(f"[Quick Apply Error]: {e}")
 
     threading.Thread(target=run_apply, daemon=True).start()
-    return {"message": f"Applying to {company} in the background!"}
+    return {"message": f"Opening Chrome to fill form for {company}! Review on screen (Submit is disabled)."}
 
 
 @app.post("/api/scan_and_apply")
 async def scan_and_apply():
-    """Scans Gmail for placement drives and automatically applies to all found links."""
+    """Scans Gmail for placement drives and automatically fills all found links (Review Mode)."""
     def run_scan_apply():
         try:
             bot_state["is_running"] = True
@@ -360,8 +360,7 @@ async def scan_and_apply():
                 bot_state["current_status"] = f"Inbox scanned: No new job links found for '{subject_to_search}'"
                 return
 
-            bot_state["current_status"] = f"Found {len(jobs)} jobs in Gmail. Applying to all..."
-            auto_sub = bot_state.get("auto_submit", True)
+            bot_state["current_status"] = f"Found {len(jobs)} jobs in Gmail. Launching visible Chrome..."
 
             for idx, job in enumerate(jobs, 1):
                 if bot_state["stop_requested"]:
@@ -372,18 +371,33 @@ async def scan_and_apply():
                 if not url:
                     continue
 
-                bot_state["current_status"] = f"[{idx}/{len(jobs)}] Applying to {company} ({role})..."
-                filler.apply_to_job(apply_url=url, company=company, role=role, auto_submit=auto_sub)
+                bot_state["current_status"] = f"[{idx}/{len(jobs)}] Reviewing {company} ({role}) on Chrome..."
+                # Strictly False in debugging mode: will NOT click submit
+                filler.apply_to_job(apply_url=url, company=company, role=role, auto_submit=False)
                 bot_state["stats"]["applied_count"] += 1
 
-            bot_state["current_status"] = f"Finished applying to all {len(jobs)} jobs from Gmail!"
+            bot_state["current_status"] = f"Completed reviewing {len(jobs)} jobs from Gmail! (No submissions were made)"
         except Exception as e:
             bot_state["current_status"] = f"Error: {str(e)[:45]}"
         finally:
             bot_state["is_running"] = False
 
     threading.Thread(target=run_scan_apply, daemon=True).start()
-    return {"message": "Scanning VIT Bhopal inbox and applying to all placement links!"}
+    return {"message": "Scanning VIT Bhopal inbox and launching visible Chrome for each placement link!"}
+
+
+@app.post("/api/test_browser")
+def test_browser():
+    """Immediately pops open real Google Chrome on the user's desktop to test visibility."""
+    def open_test():
+        from form_filler import AIFormFiller
+        filler = AIFormFiller()
+        mock_file = BASE_DIR / "tests" / "mock_placement_form.html"
+        mock_url = mock_file.as_uri()
+        filler.apply_to_job(apply_url=mock_url, company="Mock Campus Placement", role="Software Engineer", auto_submit=False)
+
+    threading.Thread(target=open_test, daemon=True).start()
+    return {"message": "Launching visible Chrome window on your screen now!"}
 
 
 @app.get("/api/logs")
@@ -537,6 +551,20 @@ def mobile_ui():
 
     <!-- Main Xbox Dashboard Grid -->
     <main class="max-w-xl mx-auto p-4 space-y-4">
+
+        <!-- Safety Status Banner: Review Only -->
+        <div class="p-3.5 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 text-xs flex items-center justify-between shadow-[0_0_20px_rgba(16,124,16,0.2)]">
+            <div class="flex items-center gap-2.5">
+                <span class="text-base">🛡️</span>
+                <div>
+                    <span class="font-extrabold text-[#2ecc71] tracking-wide uppercase text-[11px]">Debug Inspection Active</span>
+                    <p class="text-zinc-300 text-[11px]">Bot opens real Chrome & fills all fields, but <span class="text-white font-bold underline">NEVER clicks Submit</span>.</p>
+                </div>
+            </div>
+            <button onclick="testLiveChrome()" class="px-3 py-1.5 bg-[#107c10] hover:bg-[#15803d] text-white rounded-xl text-[10px] font-black uppercase tracking-wider shrink-0 shadow-md">
+                👁️ Test Chrome
+            </button>
+        </div>
 
         <!-- Xbox Hero Tile: Auto-Pilot Controller -->
         <div class="xbox-tile p-5 rounded-3xl relative overflow-hidden border border-emerald-500/20">
@@ -875,6 +903,16 @@ def mobile_ui():
         async function stopBot() {
             await fetch('/api/stop', { method: 'POST' });
             fetchStatus();
+        }
+
+        async function testLiveChrome() {
+            triggerAchievementToast('Launching Visible Chrome Window...');
+            try {
+                await fetch('/api/test_browser', { method: 'POST' });
+                fetchStatus();
+            } catch(e) {
+                alert('Error: ' + e);
+            }
         }
 
         async function saveSubject() {
