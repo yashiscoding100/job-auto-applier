@@ -92,10 +92,10 @@ def bot_worker_loop():
     bot_state["current_status"] = "Active & monitoring..."
 
     try:
-        from email_reader import PlacementEmailReader
         from form_filler import AIFormFiller
-        reader = PlacementEmailReader()
+        from gmail_oauth import GoogleOAuthGmailReader
         filler = AIFormFiller()
+        oauth_reader = GoogleOAuthGmailReader()
 
         while not bot_state["stop_requested"]:
             subject_to_search = get_email_subject()
@@ -103,7 +103,13 @@ def bot_worker_loop():
             bot_state["last_run_time"] = time.strftime("%H:%M:%S")
 
             try:
-                jobs = reader.fetch_placement_emails(max_emails=3)
+                # Use official Google OAuth reader if authenticated
+                if oauth_reader.is_authenticated():
+                    jobs = oauth_reader.fetch_placement_emails(subject_query=subject_to_search, max_results=3)
+                else:
+                    from email_reader import PlacementEmailReader
+                    reader = PlacementEmailReader()
+                    jobs = reader.fetch_placement_emails(max_emails=3)
                 if bot_state["stop_requested"]:
                     break
 
@@ -180,6 +186,31 @@ async def api_save_subject(request: Request):
         raise HTTPException(status_code=400, detail="Subject cannot be empty")
     save_email_subject(new_sub)
     return {"message": f"Email subject filter updated to: '{new_sub}'", "subject": new_sub}
+
+
+@app.get("/api/auth/google_status")
+def google_status():
+    """Returns official Google OAuth connection status."""
+    from gmail_oauth import GoogleOAuthGmailReader
+    r = GoogleOAuthGmailReader()
+    is_auth = r.is_authenticated()
+    email_addr = r.get_user_email() if is_auth else None
+    return {
+        "authenticated": is_auth,
+        "email": email_addr
+    }
+
+
+@app.post("/api/auth/trigger_oauth")
+def trigger_oauth():
+    """Opens official Google login popup in Chrome."""
+    from gmail_oauth import GoogleOAuthGmailReader
+    def run_auth():
+        r = GoogleOAuthGmailReader()
+        r.authenticate()
+    threading.Thread(target=run_auth, daemon=True).start()
+    return {"message": "Google Login opening in your browser! Click Allow to finish."}
+
 
 
 @app.get("/api/profile")
@@ -366,6 +397,21 @@ def mobile_ui():
                     <div>• <code class="text-amber-300">Placement Alert</code></div>
                     <div>• <code class="text-amber-300">Offcampus Drive 2025</code></div>
                 </div>
+            </div>
+
+            <!-- Official Google OAuth 2.0 Sign In Card -->
+            <div class="glass-card p-4 rounded-3xl space-y-3 border border-emerald-500/30">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
+                        <span>🔗</span> Official Google Sign-In (OAuth 2.0)
+                    </h3>
+                    <span id="oauthBadge" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-medium">Checking...</span>
+                </div>
+                <p class="text-xs text-slate-400">Opens official Google Login in Chrome. You click "Allow". Zero passwords ever typed or stored.</p>
+                <div id="oauthAccountText" class="text-xs font-mono text-emerald-300">Checking connection...</div>
+                <button onclick="triggerGoogleOAuth()" id="btnOAuth" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 rounded-2xl font-bold text-xs text-white shadow-lg transition flex items-center justify-center gap-2">
+                    <span>🌐</span> Sign In with Google
+                </button>
             </div>
         </div>
 
@@ -616,10 +662,44 @@ def mobile_ui():
             }
         }
 
+        async function checkGoogleOAuth() {
+            try {
+                const res = await fetch('/api/auth/google_status');
+                const data = await res.json();
+                const badge = document.getElementById('oauthBadge');
+                const text = document.getElementById('oauthAccountText');
+                const btn = document.getElementById('btnOAuth');
+
+                if (data.authenticated && data.email) {
+                    badge.innerText = 'CONNECTED';
+                    badge.className = 'text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-medium border border-emerald-500/30';
+                    text.innerText = 'Connected: ' + data.email;
+                    btn.innerText = '✅ Google Account Active';
+                    btn.className = 'w-full py-3 bg-emerald-800 text-slate-300 rounded-2xl font-bold text-xs cursor-default';
+                } else {
+                    badge.innerText = 'NOT CONNECTED';
+                    badge.className = 'text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-medium';
+                    text.innerText = 'Zero passwords stored. Click to connect:';
+                    btn.innerHTML = '<span>🌐</span> Sign In with Google';
+                    btn.className = 'w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 rounded-2xl font-bold text-xs text-white shadow-lg transition flex items-center justify-center gap-2';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function triggerGoogleOAuth() {
+            alert('Opening Google Sign-In window on your PC screen! Click "Allow" to finish.');
+            await fetch('/api/auth/trigger_oauth', { method: 'POST' });
+            setTimeout(checkGoogleOAuth, 5000);
+        }
+
         setInterval(fetchStatus, 3000);
         setInterval(fetchLogs, 10000);
+        setInterval(checkGoogleOAuth, 5000);
 
         fetchStatus();
+        checkGoogleOAuth();
         loadProfile();
         fetchLogs();
     </script>

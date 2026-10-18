@@ -34,15 +34,35 @@
   "resumes": {
     "sde": {
       "file": "resumes/resume_sde.pdf",
-      "target_roles": ["Software Engineer", "Backend Developer", "SDE", "Java Developer", "Python Developer", "C++ Developer"]
+      "target_roles": [
+        "Software Engineer",
+        "Backend Developer",
+        "SDE",
+        "Java Developer",
+        "Python Developer",
+        "C++ Developer"
+      ]
     },
     "data_analyst": {
       "file": "resumes/resume_data_analyst.pdf",
-      "target_roles": ["Data Analyst", "Business Analyst", "Data Scientist", "SQL", "PowerBI", "Analytics"]
+      "target_roles": [
+        "Data Analyst",
+        "Business Analyst",
+        "Data Scientist",
+        "SQL",
+        "PowerBI",
+        "Analytics"
+      ]
     },
     "web_developer": {
       "file": "resumes/resume_web_developer.pdf",
-      "target_roles": ["Frontend Developer", "Full Stack Developer", "React Developer", "Web Developer", "Node.js"]
+      "target_roles": [
+        "Frontend Developer",
+        "Full Stack Developer",
+        "React Developer",
+        "Web Developer",
+        "Node.js"
+      ]
     }
   },
   "default_resume": "resumes/resume.pdf",
