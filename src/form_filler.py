@@ -493,11 +493,16 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
                 page.goto(apply_url, timeout=60000, wait_until="domcontentloaded")
                 time.sleep(3)
 
-                # Check for initial "Apply" / "Register" buttons on career portals
-                apply_trigger = page.query_selector('a:has-text("Apply Now"), button:has-text("Apply Now"), a:has-text("Apply"), button:has-text("Apply")')
+                # Check for initial "Apply", "Upload resume", or "Register" buttons on career portals
+                apply_trigger = page.query_selector(
+                    'a:has-text("Upload resume"), button:has-text("Upload resume"), [role="button"]:has-text("Upload resume"), '
+                    'a:has-text("Without Resume"), button:has-text("Without Resume"), [role="button"]:has-text("Without Resume"), '
+                    'a:has-text("Apply Now"), button:has-text("Apply Now"), a:has-text("Apply"), button:has-text("Apply"), '
+                    'a:has-text("Autofill with Resume"), button:has-text("Autofill with Resume")'
+                )
                 if apply_trigger:
                     try:
-                        print("Clicking initial 'Apply' portal button...")
+                        print("Clicking initial portal action button...")
                         apply_trigger.click()
                         time.sleep(3)
                     except Exception:
