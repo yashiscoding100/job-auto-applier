@@ -269,6 +269,8 @@ def get_logs():
 # ---------------- Modern, Ultra User-Friendly Mobile UI ----------------
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/api", response_class=HTMLResponse)
+@app.get("/api/index.py", response_class=HTMLResponse)
 def mobile_ui():
     return """
 <!DOCTYPE html>
