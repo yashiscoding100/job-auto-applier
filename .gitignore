@@ -1,0 +1,22 @@
+# Environment and Secrets (CRITICAL: Never commit your API keys)
+.env
+.env.local
+
+# Chrome sessions & user profile data
+chrome_session/
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Playwright downloads & system logs
+.system_generated/
+logs/*.csv
+
+# OS metadata
+.DS_Store
+Thumbs.db

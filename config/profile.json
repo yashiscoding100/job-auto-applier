@@ -1,0 +1,55 @@
+{
+  "personal": {
+    "first_name": "Yash",
+    "last_name": "",
+    "full_name": "Yash",
+    "email": "your_email@gmail.com",
+    "phone": "+919876543210",
+    "gender": "Male",
+    "current_city": "Delhi NCR",
+    "current_state": "Delhi",
+    "country": "India",
+    "willing_to_relocate": "Yes",
+    "notice_period_days": "0",
+    "expected_ctc_lpa": "8-12 LPA",
+    "current_ctc_lpa": "0"
+  },
+  "academics": {
+    "college_name": "Your College / University Name",
+    "degree": "B.Tech",
+    "branch_or_specialization": "Computer Science & Engineering",
+    "roll_number": "YOUR_ROLL_NUMBER",
+    "graduation_year": "2025",
+    "cgpa_or_percentage": "8.5",
+    "tenth_percentage": "90",
+    "twelfth_percentage": "88",
+    "has_active_backlogs": "No",
+    "total_backlogs": "0"
+  },
+  "links": {
+    "linkedin": "https://www.linkedin.com/in/your-profile",
+    "github": "https://github.com/your-username",
+    "portfolio": "https://your-portfolio.com"
+  },
+  "resumes": {
+    "sde": {
+      "file": "resumes/resume_sde.pdf",
+      "target_roles": ["Software Engineer", "Backend Developer", "SDE", "Java Developer", "Python Developer", "C++ Developer"]
+    },
+    "data_analyst": {
+      "file": "resumes/resume_data_analyst.pdf",
+      "target_roles": ["Data Analyst", "Business Analyst", "Data Scientist", "SQL", "PowerBI", "Analytics"]
+    },
+    "web_developer": {
+      "file": "resumes/resume_web_developer.pdf",
+      "target_roles": ["Frontend Developer", "Full Stack Developer", "React Developer", "Web Developer", "Node.js"]
+    }
+  },
+  "default_resume": "resumes/resume.pdf",
+  "common_answers": {
+    "why_hire_you": "I am a dedicated software engineer with strong fundamentals in data structures, algorithms, and full-stack development, ready to contribute immediately with fast learning ability.",
+    "strengths": "Fast learner, disciplined problem solver, and strong team collaborator.",
+    "authorized_to_work_in_india": "Yes",
+    "need_visa_sponsorship": "No"
+  }
+}
