@@ -468,20 +468,20 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
 
         return False
 
-    def apply_to_job(self, apply_url: str, company: str = "Unknown", role: str = "Unknown", auto_submit: bool = False, headless: bool = True):
+    def apply_to_job(self, apply_url: str, company: str = "Unknown", role: str = "Unknown", auto_submit: bool = False, headless: bool = False):
         """
         End-to-End Multi-Page Job Application Engine.
-        Runs silently in the background (headless=True) so you can do other work!
+        Opens a VISIBLE Chrome window so you can watch Gemini work live!
         """
         print(f"\n=======================================================")
         print(f"⚡ PROCESSING APPLICATION: {company} - {role}")
         print(f"🌐 URL: {apply_url}")
         print(f"⚙️ Auto-Submit: {'ON (Instant Apply)' if auto_submit else 'OFF (Review Mode)'}")
-        print(f"🤫 Mode: {'Silent Background' if headless else 'Visible Window'}")
+        print(f"🖥️ Mode: {'Visible Chrome Window' if not headless else 'Silent Background'}")
         print(f"=======================================================")
 
         with sync_playwright() as p:
-            # Runs silently in the background without stealing screen focus
+            # Opens a real visible Chrome browser window on your screen
             browser = p.chromium.launch(
                 headless=headless,
                 args=["--start-maximized", "--disable-blink-features=AutomationControlled"]
