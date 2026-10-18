@@ -188,6 +188,87 @@ async def api_save_subject(request: Request):
     return {"message": f"Email subject filter updated to: '{new_sub}'", "subject": new_sub}
 
 
+@app.get("/api/auth/email_status")
+def email_status():
+    """Returns Gmail connection status (App Password or OAuth)."""
+    gmail_user = os.getenv("GMAIL_USER")
+    gmail_pass = os.getenv("GMAIL_APP_PASSWORD")
+    if gmail_user and gmail_pass:
+        return {
+            "authenticated": True,
+            "email": gmail_user,
+            "method": "App Password (Read-Only)"
+        }
+    from gmail_oauth import GoogleOAuthGmailReader
+    r = GoogleOAuthGmailReader()
+    if r.is_authenticated():
+        return {
+            "authenticated": True,
+            "email": r.get_user_email(),
+            "method": "Official OAuth (Read-Only)"
+        }
+    return {
+        "authenticated": False,
+        "email": None,
+        "method": None
+    }
+
+
+@app.post("/api/auth/connect_gmail")
+async def connect_gmail(request: Request):
+    """Verifies Gmail IMAP credentials (Read-Only) and saves to .env and profile."""
+    import imaplib
+    import re
+    data = await request.json()
+    email_addr = data.get("email", "").strip()
+    app_pwd = data.get("app_password", "").strip()
+
+    if not email_addr or not app_pwd:
+        raise HTTPException(status_code=400, detail="Please enter both your Gmail address and 16-letter App Password.")
+
+    clean_pwd = app_pwd.replace(" ", "")
+
+    try:
+        # Test IMAP connection strictly read-only
+        mail = imaplib.IMAP4_SSL("imap.gmail.com")
+        mail.login(email_addr, clean_pwd)
+        mail.logout()
+    except Exception as e:
+        err_msg = str(e)
+        if "AUTHENTICATIONFAILED" in err_msg:
+            raise HTTPException(
+                status_code=400,
+                detail="Authentication failed. Please verify your Gmail address and 16-character App Password, and ensure IMAP is enabled in Gmail Settings."
+            )
+        raise HTTPException(status_code=400, detail=f"Connection failed: {err_msg}")
+
+    # Set in memory
+    os.environ["GMAIL_USER"] = email_addr
+    os.environ["GMAIL_APP_PASSWORD"] = clean_pwd
+
+    # Write to .env
+    if ENV_FILE.exists():
+        content = ENV_FILE.read_text(encoding="utf-8")
+        if "GMAIL_USER=" in content:
+            content = re.sub(r"GMAIL_USER=.*", f"GMAIL_USER={email_addr}", content)
+        else:
+            content += f"\nGMAIL_USER={email_addr}"
+        if "GMAIL_APP_PASSWORD=" in content:
+            content = re.sub(r"GMAIL_APP_PASSWORD=.*", f"GMAIL_APP_PASSWORD={clean_pwd}", content)
+        else:
+            content += f"\nGMAIL_APP_PASSWORD={clean_pwd}"
+        ENV_FILE.write_text(content, encoding="utf-8")
+
+    # Update profile email
+    prof = get_profile()
+    if "personal" not in prof:
+        prof["personal"] = {}
+    prof["personal"]["email"] = email_addr
+    save_profile(prof)
+
+    return {"message": f"Successfully connected to {email_addr}! Read-only scanning active.", "email": email_addr}
+
+
 @app.get("/api/auth/google_status")
 def google_status():
     """Returns official Google OAuth connection status."""
@@ -210,6 +291,7 @@ def trigger_oauth():
         r.authenticate()
     threading.Thread(target=run_auth, daemon=True).start()
     return {"message": "Google Login opening in your browser! Click Allow to finish."}
+
 
 
 
@@ -373,8 +455,40 @@ def mobile_ui():
             </div>
         </div>
 
-        <!-- TAB 2: EMAIL SUBJECT CHECKER & CUSTOMIZER -->
+        <!-- TAB 2: EMAIL & SUBJECT CHECKER -->
         <div id="view-email" class="hidden space-y-4">
+
+            <!-- Gmail Connection (Read-Only) -->
+            <div class="glass-card p-4 rounded-3xl space-y-3 border border-emerald-500/30">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
+                        <span>🔒</span> Connect Placement Gmail (Read-Only)
+                    </h3>
+                    <span id="gmailBadge" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-medium">Checking...</span>
+                </div>
+                <div id="gmailConnectedInfo" class="text-xs text-slate-400">
+                    The bot reads only incoming placement emails. It has <strong>no permission or ability to send emails</strong> or modify your account.
+                </div>
+
+                <div class="space-y-2.5 pt-1">
+                    <div>
+                        <label class="text-[11px] text-slate-400 font-semibold uppercase">Gmail Address:</label>
+                        <input type="email" id="gmailUserInput" placeholder="e.g. name@gmail.com" class="w-full bg-slate-900/90 border border-slate-700 rounded-2xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-[11px] text-slate-400 font-semibold uppercase">16-Character App Password:</label>
+                            <a href="https://myaccount.google.com/apppasswords" target="_blank" class="text-[10px] text-blue-400 hover:underline">Get code from Google ↗</a>
+                        </div>
+                        <input type="password" id="gmailPassInput" placeholder="e.g. abcd efgh ijkl mnop" class="w-full bg-slate-900/90 border border-slate-700 rounded-2xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono">
+                    </div>
+                    <button onclick="saveGmailAuth()" id="btnSaveGmail" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 rounded-2xl font-bold text-xs text-white shadow-lg transition flex items-center justify-center gap-2">
+                        <span>🔗</span> Connect & Test Inbox
+                    </button>
+                </div>
+            </div>
+
+            <!-- Placement Email Subject Filter -->
             <div class="glass-card p-4 rounded-3xl space-y-3">
                 <div class="flex items-center justify-between">
                     <h3 class="text-sm font-bold text-amber-400 flex items-center gap-1.5">
@@ -398,21 +512,6 @@ def mobile_ui():
                     <div>• <strong>Multiple Keywords:</strong> Separate with commas (e.g. <code class="text-amber-300">god bless you, Placement, Offcampus, Drive</code>)</div>
                     <div>• <strong>Bundle Detection:</strong> If a single email contains <strong>multiple job openings</strong> (e.g. Infosys + Cognizant in 1 digest), Gemini extracts and applies to <strong>ALL of them</strong>!</div>
                 </div>
-            </div>
-
-            <!-- Official Google OAuth 2.0 Sign In Card -->
-            <div class="glass-card p-4 rounded-3xl space-y-3 border border-emerald-500/30">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
-                        <span>🔗</span> Official Google Sign-In (OAuth 2.0)
-                    </h3>
-                    <span id="oauthBadge" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-medium">Checking...</span>
-                </div>
-                <p class="text-xs text-slate-400">Opens official Google Login in Chrome. You click "Allow". Zero passwords ever typed or stored.</p>
-                <div id="oauthAccountText" class="text-xs font-mono text-emerald-300">Checking connection...</div>
-                <button onclick="triggerGoogleOAuth()" id="btnOAuth" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 rounded-2xl font-bold text-xs text-white shadow-lg transition flex items-center justify-center gap-2">
-                    <span>🌐</span> Sign In with Google
-                </button>
             </div>
         </div>
 
@@ -663,44 +762,67 @@ def mobile_ui():
             }
         }
 
-        async function checkGoogleOAuth() {
+        async function checkGmailStatus() {
             try {
-                const res = await fetch('/api/auth/google_status');
+                const res = await fetch('/api/auth/email_status');
                 const data = await res.json();
-                const badge = document.getElementById('oauthBadge');
-                const text = document.getElementById('oauthAccountText');
-                const btn = document.getElementById('btnOAuth');
+                const badge = document.getElementById('gmailBadge');
+                const info = document.getElementById('gmailConnectedInfo');
+                const btn = document.getElementById('btnSaveGmail');
 
                 if (data.authenticated && data.email) {
                     badge.innerText = 'CONNECTED';
                     badge.className = 'text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-medium border border-emerald-500/30';
-                    text.innerText = 'Connected: ' + data.email;
-                    btn.innerText = '✅ Google Account Active';
-                    btn.className = 'w-full py-3 bg-emerald-800 text-slate-300 rounded-2xl font-bold text-xs cursor-default';
+                    info.innerHTML = `✅ <strong>Connected:</strong> <span class="font-mono text-emerald-300">${data.email}</span> (${data.method})<br><span class="text-[11px] text-slate-400">Strictly Read-Only: Inbox scanning for placement emails is active.</span>`;
+                    document.getElementById('gmailUserInput').value = data.email;
+                    btn.innerHTML = '<span>🔄</span> Update Connection';
                 } else {
                     badge.innerText = 'NOT CONNECTED';
-                    badge.className = 'text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-medium';
-                    text.innerText = 'Zero passwords stored. Click to connect:';
-                    btn.innerHTML = '<span>🌐</span> Sign In with Google';
-                    btn.className = 'w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 rounded-2xl font-bold text-xs text-white shadow-lg transition flex items-center justify-center gap-2';
+                    badge.className = 'text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-medium border border-amber-500/30';
+                    info.innerHTML = `Enter your Gmail and 16-character App Password below. <strong>Zero emails will ever be sent. Read-only inbox scanning only.</strong>`;
+                    btn.innerHTML = '<span>🔗</span> Connect & Test Inbox';
                 }
             } catch (e) {
                 console.error(e);
             }
         }
 
-        async function triggerGoogleOAuth() {
-            alert('Opening Google Sign-In window on your PC screen! Click "Allow" to finish.');
-            await fetch('/api/auth/trigger_oauth', { method: 'POST' });
-            setTimeout(checkGoogleOAuth, 5000);
+        async function saveGmailAuth() {
+            const email = document.getElementById('gmailUserInput').value.trim();
+            const pwd = document.getElementById('gmailPassInput').value.trim();
+            if (!email || !pwd) {
+                alert('Please enter both your Gmail address and 16-character App Password.');
+                return;
+            }
+            const btn = document.getElementById('btnSaveGmail');
+            btn.innerText = '⏳ Verifying IMAP Connection...';
+            try {
+                const res = await fetch('/api/auth/connect_gmail', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email, app_password: pwd })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert('⚠️ ' + (data.detail || 'Connection failed'));
+                    btn.innerHTML = '<span>🔗</span> Try Again';
+                    return;
+                }
+                alert('🎉 ' + data.message);
+                checkGmailStatus();
+                fetchStatus();
+            } catch (err) {
+                alert('Error: ' + err);
+                btn.innerHTML = '<span>🔗</span> Connect & Test Inbox';
+            }
         }
 
         setInterval(fetchStatus, 3000);
         setInterval(fetchLogs, 10000);
-        setInterval(checkGoogleOAuth, 5000);
+        setInterval(checkGmailStatus, 5000);
 
         fetchStatus();
-        checkGoogleOAuth();
+        checkGmailStatus();
         loadProfile();
         fetchLogs();
     </script>
