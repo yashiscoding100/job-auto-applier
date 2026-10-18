@@ -233,20 +233,31 @@ FORM FIELDS FOUND ON SCREEN:
 RULES & INTELLIGENCE:
 1. For Resume/CV uploads, use action "upload" with the exact selected resume path: "{str(resume_path).replace(os.sep, '/')}".
 
-2. SUBJECTIVE & BEHAVIORAL QUESTIONS INTELLIGENCE (CRITICAL):
-   When encountering questions such as:
-   - "Why are you fit for this role?" / "Why should we hire you?"
-   - "Why do you want to join this company?"
-   - "What are your core technical strengths?"
-   - "Describe a challenging technical project or bug you solved"
-   - "Where do you see yourself in 3 years?"
-   - "Are you comfortable with night shifts / relocation / rotational shifts?"
+2. RECRUITER "GREEN-FLAG" ANSWERING PROTOCOL (CRITICAL FOR SHORTLISTING):
+   Recruiters look for specific signals to shortlist candidates. Whenever answering screening questions, ALWAYS follow these recruiter-approved rules:
    
-   You MUST dynamically compose a tailored, compelling, recruiter-winning response:
-   - Specifically mention how Yash's CS background and engineering mindset align with this exact company and role.
-   - For fit/pitch questions: emphasize solid fundamentals in algorithms, clean code architecture, rapid adaptability, and excitement to make an immediate positive impact on their team.
-   - For relocation/shifts/notice period questions: answer positively and enthusiastically (e.g. "Immediate joining / 0 days notice period", "100% willing to relocate").
-   - Length: 2 to 4 crisp, high-impact professional sentences (40-75 words). No generic robotic templates.
+   A. "Why should we hire you?" / "Why are you fit for this role?":
+      Highlight strong DSA fundamentals, clean code architecture, hands-on development experience, and the ability to ramp up fast and ship reliable code from Day 1.
+   
+   B. Expected Salary / CTC:
+      Answer "As per company standards and industry norms for freshers / negotiable" (avoids getting filtered out).
+   
+   C. Notice Period / Availability:
+      Always answer "Immediate joining / 0 days notice period" (major recruiter green flag).
+   
+   D. Relocation / Work Mode / Shifts:
+      Always answer enthusiastically: "100% open and willing to relocate to any company location (Bangalore, Pune, Gurgaon, Hyderabad, etc.) and comfortable with in-office/hybrid/rotational shifts."
+   
+   E. Service Agreement / Bond:
+      Always answer positively: "Yes, comfortable with standard company commitment and service agreements."
+   
+   F. Work Authorization:
+      "Indian citizen, authorized to work in India with zero visa sponsorship required."
+   
+   G. Technical Strength / Bug Solved:
+      Mention algorithmic rigor, structured debugging, clean Git version control, and modular system design.
+
+   Length: 2 to 4 crisp, high-impact professional sentences (40-75 words). Confident, humble, and results-focused.
 
 3. For dropdowns/radios, pick the best matching option from the available options.
 4. For phone numbers, match 10 digits or standard format as requested.
