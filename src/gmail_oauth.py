@@ -102,18 +102,38 @@ class GoogleOAuthGmailReader:
             if not self.authenticate():
                 return []
 
-        print(f"\n🔍 [Gmail API]: Searching messages with subject: '{subject_query}'...")
-        query = f'subject:"{subject_query}"'
+    def _build_search_query(self, subject_query: str) -> str:
+        """Constructs an OR search query for multiple subjects/keywords (e.g. 'god bless you, Placement, Drive')."""
+        terms = [s.strip() for s in subject_query.split(",") if s.strip()]
+        if not terms:
+            return 'subject:"god bless you"'
+        if len(terms) == 1:
+            return f'subject:"{terms[0]}"'
+        # e.g. (subject:"god bless you" OR subject:"Placement")
+        or_clause = " OR ".join([f'subject:"{t}"' for t in terms])
+        return f"({or_clause})"
+
+    def fetch_placement_emails(self, subject_query: str = "god bless you", max_results: int = 5) -> List[Dict[str, Any]]:
+        """
+        Searches Gmail inbox using official Gmail API for messages matching any of the subject keywords.
+        Finds and extracts ALL job openings inside each email!
+        """
+        if not self.service:
+            if not self.authenticate():
+                return []
+
+        query = self._build_search_query(subject_query)
+        print(f"\n🔍 [Gmail API Query]: {query}")
         try:
             results = self.service.users().messages().list(userId='me', q=query, maxResults=max_results).execute()
             messages = results.get('messages', [])
 
             if not messages:
-                print(f"No emails found matching subject: '{subject_query}'")
+                print(f"No emails found matching query: {query}")
                 return []
 
-            print(f"Found {len(messages)} matching placement emails. Analyzing with Gemini...")
-            extracted_jobs = []
+            print(f"Found {len(messages)} matching placement emails. Analyzing all job openings with Gemini...")
+            all_extracted_jobs = []
 
             for msg_summary in messages:
                 msg = self.service.users().messages().get(userId='me', id=msg_summary['id'], format='full').execute()
@@ -125,16 +145,17 @@ class GoogleOAuthGmailReader:
                         break
 
                 body = self._extract_body_from_payload(msg.get('payload', {}))
-                print(f"\n[Analyzing Email]: {subject}")
+                print(f"\n[Analyzing Email Subject]: {subject}")
 
-                job_info = self.parse_with_gemini(subject, body)
-                if job_info and job_info.get("apply_url"):
-                    job_info["message_id"] = msg_summary['id']
-                    extracted_jobs.append(job_info)
-                    print(f"  -> Extracted: {job_info.get('company')} ({job_info.get('role')})")
-                    print(f"  -> Link: {job_info.get('apply_url')}")
+                jobs_in_email = self.parse_all_jobs_with_gemini(subject, body)
+                print(f"  -> Gemini detected {len(jobs_in_email)} job opening(s) in this single email!")
+                for j in jobs_in_email:
+                    j["email_subject"] = subject
+                    j["message_id"] = msg_summary['id']
+                    all_extracted_jobs.append(j)
+                    print(f"     • [{j.get('company')}] {j.get('role')} -> {j.get('apply_url')}")
 
-            return extracted_jobs
+            return all_extracted_jobs
 
         except Exception as err:
             print(f"[Gmail API Error]: {err}")
@@ -167,28 +188,47 @@ class GoogleOAuthGmailReader:
                     text = decoded
         return text.strip()
 
-    def parse_with_gemini(self, subject: str, body: str) -> Optional[Dict[str, Any]]:
+    def parse_all_jobs_with_gemini(self, subject: str, body: str) -> List[Dict[str, Any]]:
+        """
+        Uses Gemini 3.8 Flash to detect and extract ALL job openings present in a single email.
+        College placement cells often bundle 2 to 5 different companies/links in one mail.
+        """
         if not self.ai_client:
-            return None
+            return []
 
         prompt = f"""
-You are an intelligent placement cell email parser.
-Analyze this email received from a college placement cell.
-Extract the company name, job role, and the exact application link/URL (such as Google Forms, Greenhouse, Lever, Unstop, or company career portal link).
+You are an expert college placement email parser.
+A single email from a college placement cell can contain ONE or MULTIPLE separate job openings or offcampus drives.
+Your job is to find and extract EVERY single job opening that has an application link (Google Forms, Greenhouse, Lever, Unstop, company portals, etc.).
 
 Email Subject: {subject}
 Email Content:
 ---
-{body[:3500]}
+{body[:5000]}
 ---
 
-Return a strictly valid JSON object with:
-- "is_job_email": true or false
-- "company": "Company Name"
-- "role": "Job Role"
-- "apply_url": "Full application URL starting with http/https, or null"
-- "deadline": "Deadline string or null"
+TASK:
+1. Identify all distinct job openings mentioned.
+2. For each job opening, extract:
+   - "company": Company Name
+   - "role": Job Title / Role
+   - "apply_url": Direct application URL (must start with http/https)
+   - "requirements": Key skills or branch eligibility
 
+Return a strictly valid JSON object:
+{{
+  "is_job_email": true or false,
+  "jobs": [
+    {{
+      "company": "Company A",
+      "role": "Role A",
+      "apply_url": "https://...",
+      "requirements": "..."
+    }}
+  ]
+}}
+
+If no actionable job application links are found, return {{"is_job_email": false, "jobs": []}}.
 Only output raw JSON. Do not include markdown codeblocks or explanation.
 """
         try:
@@ -200,10 +240,11 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
             if cleaned.startswith("```"):
                 cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
                 cleaned = re.sub(r"\s*```$", "", cleaned)
-            return json.loads(cleaned)
+            data = json.loads(cleaned)
+            return [j for j in data.get("jobs", []) if j.get("apply_url")]
         except Exception as e:
-            print(f"[Error parsing with Gemini]: {e}")
-            return None
+            print(f"[Error parsing jobs with Gemini]: {e}")
+            return []
 
 
 if __name__ == "__main__":

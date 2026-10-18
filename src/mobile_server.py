@@ -382,9 +382,9 @@ def mobile_ui():
                 <p class="text-xs text-slate-400">The bot searches your placement emails for this exact subject phrase. You can check or change it anytime:</p>
 
                 <div class="space-y-2">
-                    <label class="text-[11px] text-slate-400 font-semibold uppercase">Current Monitored Subject:</label>
+                    <label class="text-[11px] text-slate-400 font-semibold uppercase">Monitored Subject(s) / Keywords (Comma-separated):</label>
                     <div class="flex gap-2">
-                        <input type="text" id="subjectInput" class="flex-1 bg-slate-900/90 border border-slate-700 rounded-2xl p-3 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-500">
+                        <input type="text" id="subjectInput" placeholder="god bless you, Placement, Offcampus" class="flex-1 bg-slate-900/90 border border-slate-700 rounded-2xl p-3 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-500">
                         <button onclick="saveSubject()" class="bg-amber-600 hover:bg-amber-500 active:scale-95 px-4 rounded-2xl text-xs font-bold text-white transition">
                             Save
                         </button>
@@ -392,10 +392,9 @@ def mobile_ui():
                 </div>
 
                 <div class="bg-slate-900/60 p-3 rounded-2xl border border-slate-800 text-[11px] text-slate-400 space-y-1">
-                    <div class="text-slate-300 font-semibold">💡 Common Examples:</div>
-                    <div>• <code class="text-amber-300">god bless you</code> (Your college signoff)</div>
-                    <div>• <code class="text-amber-300">Placement Alert</code></div>
-                    <div>• <code class="text-amber-300">Offcampus Drive 2025</code></div>
+                    <div class="text-slate-300 font-semibold">💡 Multi-Job Intelligence:</div>
+                    <div>• <strong>Multiple Keywords:</strong> Separate with commas (e.g. <code class="text-amber-300">god bless you, Placement, Offcampus, Drive</code>)</div>
+                    <div>• <strong>Bundle Detection:</strong> If a single email contains <strong>multiple job openings</strong> (e.g. Infosys + Cognizant in 1 digest), Gemini extracts and applies to <strong>ALL of them</strong>!</div>
                 </div>
             </div>
 
