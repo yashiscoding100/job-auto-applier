@@ -63,76 +63,109 @@ class PlacementEmailReader:
                     body = text
         return body.strip()
 
-    def parse_job_info_with_gemini(self, email_subject: str, email_body: str) -> Optional[Dict[str, Any]]:
-        """Uses Gemini API to extract structured job details and application link from messy email text."""
+    def parse_all_jobs_with_gemini(self, email_subject: str, email_body: str) -> List[Dict[str, Any]]:
+        """Uses Gemini 3.8 Flash to detect and extract ALL job openings present in a single email."""
         if not self.ai_client:
             raise ValueError("GEMINI_API_KEY is not set in .env file.")
 
         prompt = f"""
-You are an intelligent placement cell email parser.
-Analyze this email received from a college placement cell.
-Extract the company name, job role, and the exact application link/URL (such as Google Forms, Greenhouse, Lever, Unstop, or company career portal link).
+You are an expert college placement email parser.
+A single email from a college placement cell can contain ONE or MULTIPLE separate job openings or placement drives.
+Your job is to find and extract EVERY single job opening that has an application link (Google Forms, Greenhouse, Lever, Unstop, company portals, etc.).
 
 Email Subject: {email_subject}
 Email Content:
 ---
-{email_body[:4000]}
+{email_body[:5000]}
 ---
 
-Return a strictly valid JSON object with the following keys:
-- "is_job_email": true or false
-- "company": "Company Name (or Unknown)"
-- "role": "Job Title/Role (or Unknown)"
-- "apply_url": "Full application URL starting with http/https, or null if none found"
-- "deadline": "Application deadline if mentioned, or null"
-- "eligibility": "Brief eligibility (e.g., B.Tech CSE, 60%+, etc.) or null"
+TASK:
+1. Identify all distinct job openings mentioned.
+2. For each job opening, extract:
+   - "company": Company Name
+   - "role": Job Title / Role
+   - "apply_url": Direct application URL (must start with http/https)
+   - "requirements": Key skills or branch eligibility
 
+Return a strictly valid JSON object:
+{{
+  "is_job_email": true or false,
+  "jobs": [
+    {{
+      "company": "Company A",
+      "role": "Role A",
+      "apply_url": "https://...",
+      "requirements": "..."
+    }}
+  ]
+}}
+
+If no actionable job application links are found, return {{"is_job_email": false, "jobs": []}}.
 Only output raw JSON. Do not include markdown codeblocks or explanation.
 """
-        response = self.ai_client.models.generate_content(
-            model='gemini-3.8-flash',
-            contents=prompt,
-        )
+        models_to_try = ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite', 'gemini-3.8-flash']
+        response = None
+        for m in models_to_try:
+            try:
+                response = self.ai_client.models.generate_content(
+                    model=m,
+                    contents=prompt,
+                )
+                if response and response.text:
+                    break
+            except Exception as e:
+                if '429' in str(e) or 'NOT_FOUND' in str(e) or 'quota' in str(e).lower():
+                    continue
+                print(f"[Model {m} failed]: {e}")
+
+        if not response or not response.text:
+            return []
 
         try:
             cleaned_text = response.text.strip()
-            # Remove ```json or ``` wrapper if present
             if cleaned_text.startswith("```"):
                 cleaned_text = re.sub(r"^```(?:json)?\s*", "", cleaned_text)
                 cleaned_text = re.sub(r"\s*```$", "", cleaned_text)
             parsed = json.loads(cleaned_text)
-            if parsed.get("is_job_email") and parsed.get("apply_url"):
-                return parsed
-            return None
+            if parsed.get("is_job_email") and parsed.get("jobs"):
+                return [j for j in parsed["jobs"] if j.get("apply_url")]
+            return []
         except Exception as e:
             print(f"[Error parsing Gemini response]: {e}")
-            return None
+            return []
 
-    def fetch_placement_emails(self, max_emails: int = 10, mark_as_read: bool = False) -> List[Dict[str, Any]]:
-        """Connects to Gmail and fetches emails matching the placement subject filter."""
+    def fetch_placement_emails(self, max_emails: int = 10, mark_as_read: bool = False, subject_query: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Connects to Gmail and fetches emails matching the placement subject filter keywords."""
         if not self.gmail_user or not self.gmail_password:
             raise ValueError("Please provide GMAIL_USER and GMAIL_APP_PASSWORD in .env")
+
+        query_str = subject_query or self.subject_filter
+        terms = [t.strip() for t in query_str.split(",") if t.strip()]
+        if not terms:
+            terms = ["god bless you"]
 
         print(f"Connecting to {self.imap_server} for {self.gmail_user}...")
         mail = imaplib.IMAP4_SSL(self.imap_server)
         mail.login(self.gmail_user, self.gmail_password)
         mail.select("inbox")
 
-        # Search for unread or recent messages
-        search_criterion = f'(SUBJECT "{self.subject_filter}")'
-        status, response = mail.search(None, search_criterion)
+        all_eids = set()
+        for term in terms:
+            status, response = mail.search(None, f'(SUBJECT "{term}")')
+            if status == "OK" and response[0]:
+                for eid in response[0].split():
+                    all_eids.add(eid)
 
-        if status != "OK" or not response[0]:
-            print(f"No emails found with subject containing: '{self.subject_filter}'")
+        if not all_eids:
+            print(f"No emails found with subject containing: '{query_str}'")
             mail.logout()
             return []
 
-        email_ids = response[0].split()
-        print(f"Found {len(email_ids)} emails matching '{self.subject_filter}'. Processing latest {min(len(email_ids), max_emails)}...")
+        sorted_eids = sorted(list(all_eids), key=lambda x: int(x))
+        print(f"Found {len(sorted_eids)} emails matching '{query_str}'. Processing latest {min(len(sorted_eids), max_emails)}...")
 
         extracted_jobs = []
-        # Process the most recent emails first
-        for eid in reversed(email_ids[-max_emails:]):
+        for eid in reversed(sorted_eids[-max_emails:]):
             res, data = mail.fetch(eid, "(RFC822)")
             if res != "OK":
                 continue
@@ -143,14 +176,13 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
             body = self._extract_body(msg)
 
             print(f"\n[Analyzing Email]: {subject}")
-            job_data = self.parse_job_info_with_gemini(subject, body)
-            if job_data:
-                job_data["email_id"] = eid.decode("utf-8")
-                extracted_jobs.append(job_data)
-                print(f"  --> Found Job: {job_data.get('company')} | Role: {job_data.get('role')}")
-                print(f"  --> Apply Link: {job_data.get('apply_url')}")
-            else:
-                print("  --> No valid job link extracted.")
+            jobs_in_mail = self.parse_all_jobs_with_gemini(subject, body)
+            print(f"  -> Detected {len(jobs_in_mail)} actionable job(s) in this email.")
+            for j in jobs_in_mail:
+                j["email_id"] = eid.decode("utf-8")
+                j["email_subject"] = subject
+                extracted_jobs.append(j)
+                print(f"     • [{j.get('company')}] {j.get('role')} -> {j.get('apply_url')}")
 
         mail.logout()
         return extracted_jobs
@@ -163,3 +195,4 @@ if __name__ == "__main__":
         print(f"\nTotal extracted actionable jobs: {len(jobs)}")
     except Exception as err:
         print(f"[Error]: {err}")
+

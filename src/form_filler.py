@@ -35,31 +35,37 @@ class AIFormFiller:
         if not self.gemini_key:
             raise ValueError("GEMINI_API_KEY is not set in your .env file.")
 
-        # Using verified active gemini-3.8-flash model
-        self.ai_client = genai.Client(api_key=self.gemini_key)
-        self.model_name = "gemini-3.8-flash"
-
-        self.log_file = Path("logs/applications_log.csv")
-        self.log_file.parent.mkdir(parents=True, exist_ok=True)
-        self._init_log_file()
+        self.models_to_try = [
+            "gemini-3.5-flash-lite",
+            "gemini-flash-lite-latest",
+            "gemini-3.1-flash-lite",
+            "gemini-3.8-flash"
+        ]
 
     def call_gemini_with_retry(self, prompt: str, max_retries: int = 3) -> str:
-        """Calls Gemini API with automatic retry on temporary high-traffic 503 errors."""
-        for attempt in range(max_retries):
-            try:
-                res = self.ai_client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt
-                )
-                return res.text
-            except Exception as e:
-                if ("503" in str(e) or "UNAVAILABLE" in str(e)) and attempt < max_retries - 1:
-                    wait_time = 2 * (attempt + 1)
-                    print(f"[Gemini 503 Traffic Spike]: Retrying in {wait_time}s (Attempt {attempt + 1}/{max_retries})...")
-                    time.sleep(wait_time)
-                else:
-                    raise e
+        """Calls Gemini API with automatic model fallback and retries on 429/503 errors."""
+        for model_id in self.models_to_try:
+            for attempt in range(max_retries):
+                try:
+                    res = self.ai_client.models.generate_content(
+                        model=model_id,
+                        contents=prompt
+                    )
+                    if res and res.text:
+                        return res.text
+                except Exception as e:
+                    err_str = str(e)
+                    if "429" in err_str or "quota" in err_str.lower() or "NOT_FOUND" in err_str:
+                        # Fallback immediately to next model in the list
+                        break
+                    if ("503" in err_str or "UNAVAILABLE" in err_str) and attempt < max_retries - 1:
+                        wait_time = 2 * (attempt + 1)
+                        print(f"[Gemini 503 Spike on {model_id}]: Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                    else:
+                        break
         return ""
+
 
     def select_best_resume(self, company: str, role: str, page_content: str) -> Path:
         """
