@@ -34,6 +34,7 @@ bot_state = {
     "current_status": "Idle",
     "stop_requested": False,
     "last_run_time": None,
+    "auto_submit": True,
     "stats": {
         "applied_count": 0,
         "failed_count": 0
@@ -121,8 +122,8 @@ def bot_worker_loop():
                         company = job.get("company", "Placement Company")
                         role = job.get("role", "Software Role")
                         url = job.get("apply_url")
-                        bot_state["current_status"] = f"Applying to {company} ({role})..."
-                        filler.apply_to_job(apply_url=url, company=company, role=role, auto_submit=False)
+                        auto_sub = bot_state.get("auto_submit", True)
+                        filler.apply_to_job(apply_url=url, company=company, role=role, auto_submit=auto_sub)
                         bot_state["stats"]["applied_count"] += 1
                 else:
                     bot_state["current_status"] = f"Inbox clear. Listening for '{subject_to_search}'..."
@@ -331,12 +332,58 @@ async def quick_apply(request: Request):
         try:
             from form_filler import AIFormFiller
             filler = AIFormFiller()
-            filler.apply_to_job(apply_url=url, company=company, role=role, auto_submit=False)
+            auto_sub = data.get("auto_submit", bot_state.get("auto_submit", True))
+            filler.apply_to_job(apply_url=url, company=company, role=role, auto_submit=auto_sub)
         except Exception as e:
             print(f"[Quick Apply Error]: {e}")
 
     threading.Thread(target=run_apply, daemon=True).start()
     return {"message": f"Applying to {company} in the background!"}
+
+
+@app.post("/api/scan_and_apply")
+async def scan_and_apply():
+    """Scans Gmail for placement drives and automatically applies to all found links."""
+    def run_scan_apply():
+        try:
+            bot_state["is_running"] = True
+            bot_state["current_status"] = "Scanning VIT Bhopal inbox for placement emails..."
+            from email_reader import PlacementEmailReader
+            from form_filler import AIFormFiller
+
+            subject_to_search = get_email_subject()
+            reader = PlacementEmailReader()
+            filler = AIFormFiller()
+
+            jobs = reader.fetch_placement_emails(max_emails=5, subject_query=subject_to_search)
+            if not jobs:
+                bot_state["current_status"] = f"Inbox scanned: No new job links found for '{subject_to_search}'"
+                return
+
+            bot_state["current_status"] = f"Found {len(jobs)} jobs in Gmail. Applying to all..."
+            auto_sub = bot_state.get("auto_submit", True)
+
+            for idx, job in enumerate(jobs, 1):
+                if bot_state["stop_requested"]:
+                    break
+                company = job.get("company", "College Placement")
+                role = job.get("role", "Software Role")
+                url = job.get("apply_url")
+                if not url:
+                    continue
+
+                bot_state["current_status"] = f"[{idx}/{len(jobs)}] Applying to {company} ({role})..."
+                filler.apply_to_job(apply_url=url, company=company, role=role, auto_submit=auto_sub)
+                bot_state["stats"]["applied_count"] += 1
+
+            bot_state["current_status"] = f"Finished applying to all {len(jobs)} jobs from Gmail!"
+        except Exception as e:
+            bot_state["current_status"] = f"Error: {str(e)[:45]}"
+        finally:
+            bot_state["is_running"] = False
+
+    threading.Thread(target=run_scan_apply, daemon=True).start()
+    return {"message": "Scanning VIT Bhopal inbox and applying to all placement links!"}
 
 
 @app.get("/api/logs")
@@ -556,20 +603,38 @@ def mobile_ui():
 
         <!-- TAB 1: QUICK LAUNCH (A) -->
         <div id="view-apply" class="space-y-4">
+            
+            <!-- Scan Gmail & Auto-Apply Card -->
+            <div class="xbox-tile p-5 rounded-3xl space-y-3.5 border-2 border-[#107c10]/40 relative overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-black text-white flex items-center gap-2 uppercase tracking-wide">
+                        <span class="text-[#2ecc71]">📥</span> Scan Placement Gmail & Apply
+                    </h3>
+                    <span class="text-[10px] bg-[#107c10]/20 text-[#2ecc71] px-2.5 py-0.5 rounded-full border border-[#107c10]/40 font-bold">1-CLICK AUTO-APPLY</span>
+                </div>
+                <p class="text-xs text-zinc-400">Scans your VIT Bhopal inbox (<code class="text-emerald-400 font-mono">yash.23bce10699@vitbhopal.ac.in</code>) for recent placement emails, finds all Google Forms & portal links, and applies automatically!</p>
+
+                <button onclick="triggerScanAndApply()" id="btnScanApply" class="w-full py-4 bg-gradient-to-r from-[#107c10] to-[#15803d] hover:brightness-110 active:scale-95 rounded-2xl font-black text-xs text-white shadow-[0_0_25px_rgba(16,124,16,0.5)] transition flex items-center justify-center gap-2 uppercase tracking-wider">
+                    <span class="w-5 h-5 rounded-full badge-a text-[10px] flex items-center justify-center font-bold">A</span>
+                    <span>SCAN GMAIL & AUTO-APPLY TO ALL</span>
+                </button>
+            </div>
+
+            <!-- Paste Direct Link Card -->
             <div class="xbox-tile p-5 rounded-3xl space-y-3.5">
                 <div class="flex items-center justify-between">
                     <h3 class="text-sm font-black text-white flex items-center gap-2 uppercase tracking-wide">
-                        <span class="text-[#2ecc71]">⚡</span> Direct Mission Deployment
+                        <span class="text-blue-400">⚡</span> Paste Specific Job Link
                     </h3>
-                    <span class="text-[10px] bg-[#107c10]/20 text-[#2ecc71] px-2.5 py-0.5 rounded-full border border-[#107c10]/30 font-bold">100% PRIVATE</span>
+                    <span class="text-[10px] bg-blue-500/20 text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/30 font-bold">DIRECT LINK</span>
                 </div>
-                <p class="text-xs text-zinc-400">Received a Google Form or placement portal link via WhatsApp or email? Paste it here to deploy Gemini:</p>
+                <p class="text-xs text-zinc-400">Received a Google Form or portal link via WhatsApp or email? Paste it here to apply directly:</p>
 
                 <div class="space-y-2.5">
                     <input type="url" id="quickLink" placeholder="https://forms.gle/... or career portal link" class="w-full bg-zinc-950/90 border border-zinc-700/80 rounded-2xl p-3.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#107c10] focus:ring-1 focus:ring-[#107c10] font-mono">
                     
-                    <button onclick="triggerQuickApply()" class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 active:scale-95 rounded-2xl font-black text-xs text-white shadow-lg shadow-blue-900/30 transition flex items-center justify-center gap-2 uppercase tracking-wider">
-                        <span>🚀 Launch Auto-Apply Sequence</span>
+                    <button onclick="triggerQuickApply()" class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 active:scale-95 rounded-2xl font-black text-xs text-white shadow-lg shadow-blue-900/30 transition flex items-center justify-center gap-2 uppercase tracking-wider">
+                        <span>🚀 Launch Auto-Apply For This Link</span>
                     </button>
                 </div>
             </div>
@@ -820,8 +885,25 @@ def mobile_ui():
                 body: JSON.stringify({ subject: sub })
             });
             const data = await res.json();
-            triggerAchievementToast('Filter Updated: ' + sub);
             fetchStatus();
+        }
+
+        async function triggerScanAndApply() {
+            triggerAchievementToast('Patrolling Gmail & Auto-Applying...');
+            const btn = document.getElementById('btnScanApply');
+            btn.innerHTML = '<span>⏳</span> SCANNING INBOX & APPLYING...';
+            try {
+                const res = await fetch('/api/scan_and_apply', { method: 'POST' });
+                const data = await res.json();
+                fetchStatus();
+                fetchLogs();
+                setTimeout(() => {
+                    btn.innerHTML = '<span class="w-5 h-5 rounded-full badge-a text-[10px] flex items-center justify-center font-bold">A</span><span>SCAN GMAIL & AUTO-APPLY TO ALL</span>';
+                }, 4000);
+            } catch(e) {
+                alert('Error: ' + e);
+                btn.innerHTML = '<span class="w-5 h-5 rounded-full badge-a text-[10px] flex items-center justify-center font-bold">A</span><span>SCAN GMAIL & AUTO-APPLY TO ALL</span>';
+            }
         }
 
         async function triggerQuickApply() {

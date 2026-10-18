@@ -35,12 +35,18 @@ class AIFormFiller:
         if not self.gemini_key:
             raise ValueError("GEMINI_API_KEY is not set in your .env file.")
 
+        self.ai_client = genai.Client(api_key=self.gemini_key)
+        self.model_name = "gemini-3.5-flash-lite"
         self.models_to_try = [
             "gemini-3.5-flash-lite",
             "gemini-flash-lite-latest",
             "gemini-3.1-flash-lite",
             "gemini-3.8-flash"
         ]
+
+        self.log_file = Path("logs/applications_log.csv")
+        self.log_file.parent.mkdir(parents=True, exist_ok=True)
+        self._init_log_file()
 
     def call_gemini_with_retry(self, prompt: str, max_retries: int = 3) -> str:
         """Calls Gemini API with automatic model fallback and retries on 429/503 errors."""
@@ -354,7 +360,16 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
                 if action_type == "fill":
                     self.human_type(locator, val)
                 elif action_type == "select":
-                    locator.select_option(label=str(val))
+                    try:
+                        locator.select_option(label=str(val), timeout=1500)
+                    except Exception:
+                        try:
+                            locator.select_option(value=str(val), timeout=1000)
+                        except Exception:
+                            try:
+                                locator.select_option(index=1, timeout=1000)
+                            except Exception:
+                                pass
                 elif action_type == "click":
                     locator.click()
                 elif action_type == "upload":
