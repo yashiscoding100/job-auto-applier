@@ -354,189 +354,307 @@ def get_logs():
 @app.get("/api", response_class=HTMLResponse)
 @app.get("/api/index.py", response_class=HTMLResponse)
 def mobile_ui():
-    return """
-<!DOCTYPE html>
+    return """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>⚡ JobBot Pro</title>
+    <title>XBOX // JobBot Pro Core</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@500;700;800;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
-        .glass-card { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .tab-active { background: #3b82f6; color: white; }
+        :root {
+            --xbox-green: #107c10;
+            --xbox-green-light: #2ecc71;
+            --xbox-green-glow: rgba(16, 124, 16, 0.45);
+            --xbox-dark: #0a0c0f;
+            --xbox-tile: #15181e;
+            --xbox-tile-hover: #1c212a;
+        }
+        body {
+            font-family: 'Segoe UI', 'Plus Jakarta Sans', -apple-system, sans-serif;
+            background-color: var(--xbox-dark);
+            background-image: 
+                radial-gradient(circle at 85% 12%, rgba(16, 124, 16, 0.22) 0%, transparent 45%),
+                radial-gradient(circle at 15% 85%, rgba(14, 122, 13, 0.14) 0%, transparent 55%),
+                linear-gradient(180deg, #07090b 0%, #0c0e12 50%, #090b0e 100%);
+            background-attachment: fixed;
+        }
+        .xbox-tile {
+            background: rgba(21, 24, 30, 0.85);
+            backdrop-filter: blur(18px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .xbox-tile:hover {
+            border-color: rgba(16, 124, 16, 0.5);
+            box-shadow: 0 0 25px rgba(16, 124, 16, 0.25);
+            transform: translateY(-2px);
+        }
+        .xbox-tile-focused {
+            border-color: #107c10 !important;
+            box-shadow: 0 0 30px var(--xbox-green-glow) !important;
+        }
+        .tab-btn.active {
+            background: #107c10;
+            color: #ffffff;
+            border-color: #2ecc71;
+            box-shadow: 0 0 20px rgba(16, 124, 16, 0.55);
+            transform: scale(1.02);
+        }
+        .tab-btn:not(.active) {
+            color: #94a3b8;
+            background: rgba(18, 21, 27, 0.8);
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+        .tab-btn:not(.active):hover {
+            color: #ffffff;
+            background: rgba(28, 33, 42, 0.9);
+            border-color: rgba(16, 124, 16, 0.4);
+        }
+        /* Custom Glowing Scrollbars */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0c0e12; }
+        ::-webkit-scrollbar-thumb { background: #1a221b; border-radius: 999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #107c10; }
+        
+        /* Xbox Controller Badges */
+        .badge-a { background: #107c10; color: white; border: 1px solid #2ecc71; }
+        .badge-b { background: #dc2626; color: white; border: 1px solid #ef4444; }
+        .badge-x { background: #2563eb; color: white; border: 1px solid #60a5fa; }
+        .badge-y { background: #d97706; color: white; border: 1px solid #fbbf24; }
+        
+        /* Achievement Toast Animation */
+        #achievementToast {
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translateY(-130%);
+        }
+        #achievementToast.show {
+            transform: translateY(0);
+        }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen pb-24 selection:bg-blue-600">
+<body class="text-zinc-100 min-h-screen pb-20 selection:bg-[#107c10] selection:text-white">
 
-    <!-- Top Navigation Bar -->
-    <header class="sticky top-0 z-50 glass border-b border-slate-800 px-4 py-3.5 flex justify-between items-center shadow-lg">
-        <div class="flex items-center gap-2.5">
-            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-md shadow-blue-500/20">
-                <span class="text-lg font-black">⚡</span>
+    <!-- Xbox Achievement Notification Toast -->
+    <div id="achievementToast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm pointer-events-none">
+        <div class="bg-zinc-900/95 border-2 border-[#107c10] text-white p-3.5 rounded-2xl shadow-[0_0_35px_rgba(16,124,16,0.6)] flex items-center gap-3 backdrop-blur-xl">
+            <div class="w-10 h-10 rounded-full bg-[#107c10] flex items-center justify-center text-lg shadow-[0_0_15px_#107c10] animate-bounce">
+                🏆
             </div>
-            <div>
-                <h1 class="text-base font-bold tracking-tight flex items-center gap-1.5">
-                    JobBot Pro
-                    <span class="text-[10px] font-semibold bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30">Gemini 3.8</span>
-                </h1>
-                <p id="topStatus" class="text-[11px] text-slate-400">Ready</p>
+            <div class="flex-1">
+                <div class="text-[10px] font-bold tracking-widest uppercase text-[#2ecc71]">Achievement Unlocked</div>
+                <div id="achievementTitle" class="text-xs font-black truncate">Job Application Dispatched!</div>
+            </div>
+            <div class="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-lg border border-emerald-500/30">
+                +50 G
             </div>
         </div>
+    </div>
 
-        <div id="liveBadge" class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/30">
-            <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-            <span>STOPPED</span>
+    <!-- Xbox Guide Top Header -->
+    <header class="sticky top-0 z-40 bg-[#0c0e12]/85 backdrop-blur-xl border-b border-white/5 px-4 py-3 shadow-2xl">
+        <div class="max-w-xl mx-auto flex justify-between items-center">
+            
+            <!-- Left: Xbox Logo & Brand -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-full bg-black border-2 border-[#107c10] flex items-center justify-center shadow-[0_0_15px_rgba(16,124,16,0.5)]">
+                    <svg viewBox="0 0 24 24" class="w-6 h-6 fill-[#107c10]">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3.62 14.85c-.99.55-2.28.89-3.62.89s-2.63-.34-3.62-.89c-1.3-1.63-2.18-4.22-2.34-7.2 1.4-1.25 3.51-2.02 5.96-2.02s4.56.77 5.96 2.02c-.16 2.98-1.04 5.57-2.34 7.2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-sm font-black tracking-wider flex items-center gap-1.5 uppercase">
+                        <span>XBOX // JOBBOT</span>
+                        <span class="text-[10px] font-mono bg-[#107c10]/20 text-[#2ecc71] px-2 py-0.5 rounded-md border border-[#107c10]/40 font-bold">CORE 3.8</span>
+                    </h1>
+                    <p id="topStatus" class="text-[11px] text-zinc-400 font-medium">System Ready</p>
+                </div>
+            </div>
+
+            <!-- Right: Gamertag Badge & Live Pulse -->
+            <div class="flex items-center gap-2">
+                <div class="hidden sm:flex flex-col text-right">
+                    <span class="text-xs font-bold text-zinc-200">YASH // 23BCE</span>
+                    <span class="text-[10px] text-emerald-400 font-mono">1,450 G</span>
+                </div>
+                <div id="liveBadge" class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                    <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                    <span class="tracking-wide">STANDBY</span>
+                </div>
+            </div>
         </div>
     </header>
 
-    <!-- Main Container -->
-    <main class="max-w-md mx-auto p-4 space-y-4">
+    <!-- Main Xbox Dashboard Grid -->
+    <main class="max-w-xl mx-auto p-4 space-y-4">
 
-        <!-- Master Controller Card -->
-        <div class="glass-card p-4 rounded-3xl shadow-xl space-y-3">
-            <div class="flex justify-between items-center text-xs text-slate-400">
-                <span class="font-semibold uppercase tracking-wider">System Control</span>
-                <span id="lastCheckTime" class="font-mono text-slate-300">Last check: --:--</span>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2.5">
-                <button onclick="startBot()" id="btnStart" class="py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 rounded-2xl font-bold text-sm text-white shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2 transition-all">
-                    <span>▶</span> Start Auto-Bot
-                </button>
-                <button onclick="stopBot()" id="btnStop" class="py-3.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 active:scale-95 rounded-2xl font-bold text-sm text-white shadow-lg shadow-rose-900/30 flex items-center justify-center gap-2 transition-all">
-                    <span>🛑</span> KILL SWITCH
-                </button>
-            </div>
-        </div>
-
-        <!-- Tab Switcher -->
-        <div class="flex p-1 bg-slate-900/90 rounded-2xl border border-slate-800 text-xs font-semibold">
-            <button onclick="switchTab('apply')" id="tab-apply" class="flex-1 py-2 rounded-xl transition tab-active">⚡ Quick Apply</button>
-            <button onclick="switchTab('email')" id="tab-email" class="flex-1 py-2 rounded-xl transition text-slate-400 hover:text-white">📧 Subject</button>
-            <button onclick="switchTab('resumes')" id="tab-resumes" class="flex-1 py-2 rounded-xl transition text-slate-400 hover:text-white">📄 Resumes</button>
-            <button onclick="switchTab('profile')" id="tab-profile" class="flex-1 py-2 rounded-xl transition text-slate-400 hover:text-white">👤 Profile</button>
-        </div>
-
-        <!-- TAB 1: QUICK APPLY -->
-        <div id="view-apply" class="space-y-4">
-            <div class="glass-card p-4 rounded-3xl space-y-3">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-sm font-bold text-blue-400 flex items-center gap-1.5">
-                        <span>⚡</span> Paste Job Link to Apply
-                    </h3>
-                    <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 font-medium">100% Private</span>
+        <!-- Xbox Hero Tile: Auto-Pilot Controller -->
+        <div class="xbox-tile p-5 rounded-3xl relative overflow-hidden border border-emerald-500/20">
+            <div class="absolute -right-8 -top-8 w-32 h-32 bg-[#107c10]/15 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div class="flex justify-between items-center mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-extrabold uppercase tracking-widest text-[#2ecc71] flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-[#107c10] animate-ping"></span>
+                        Placement Mission Control
+                    </span>
                 </div>
-                <p class="text-xs text-slate-400">Received a link in WhatsApp or college email? Paste it here and Gemini will pick the best resume, fill fields, and submit:</p>
+                <span id="lastCheckTime" class="text-[11px] font-mono text-zinc-400">Patrol: --:--</span>
+            </div>
 
-                <div class="space-y-2">
-                    <input type="url" id="quickLink" placeholder="https://forms.gle/... or job link" class="w-full bg-slate-900/90 border border-slate-700/80 rounded-2xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500">
-                    <button onclick="triggerQuickApply()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 active:scale-95 rounded-2xl font-bold text-xs text-white shadow-lg shadow-blue-900/30 transition flex items-center justify-center gap-1.5">
-                        <span>🚀</span> Launch Auto-Apply Now
+            <!-- Big Command Buttons -->
+            <div class="grid grid-cols-2 gap-3 pt-1">
+                <button onclick="startBot()" id="btnStart" class="py-4 bg-gradient-to-r from-[#107c10] to-[#15803d] hover:brightness-110 active:scale-95 rounded-2xl font-black text-sm text-white shadow-[0_0_25px_rgba(16,124,16,0.4)] flex items-center justify-center gap-2.5 transition-all">
+                    <span class="w-5 h-5 rounded-full badge-a text-xs flex items-center justify-center font-bold">A</span>
+                    <span>ENGAGE BOT</span>
+                </button>
+                <button onclick="stopBot()" id="btnStop" class="py-4 bg-gradient-to-r from-red-600 to-rose-700 hover:brightness-110 active:scale-95 rounded-2xl font-black text-sm text-white shadow-[0_0_20px_rgba(220,38,38,0.35)] flex items-center justify-center gap-2.5 transition-all">
+                    <span class="w-5 h-5 rounded-full badge-b text-xs flex items-center justify-center font-bold">B</span>
+                    <span>KILL SWITCH</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Xbox Bento Stats Bar -->
+        <div class="grid grid-cols-3 gap-3">
+            <div class="xbox-tile p-3.5 rounded-2xl text-center">
+                <div class="text-[11px] text-zinc-400 font-medium">GamerScore / Sent</div>
+                <div id="statApplied" class="text-xl font-black text-[#2ecc71] font-mono mt-0.5">0</div>
+            </div>
+            <div class="xbox-tile p-3.5 rounded-2xl text-center">
+                <div class="text-[11px] text-zinc-400 font-medium">Loadouts (PDFs)</div>
+                <div id="statResumes" class="text-xl font-black text-indigo-400 font-mono mt-0.5">3</div>
+            </div>
+            <div class="xbox-tile p-3.5 rounded-2xl text-center">
+                <div class="text-[11px] text-zinc-400 font-medium">Inbox Shield</div>
+                <div class="text-xs font-black text-emerald-400 mt-1 uppercase tracking-tight">Read-Only</div>
+            </div>
+        </div>
+
+        <!-- Xbox Controller Guide Navigation (Tabs) -->
+        <div class="grid grid-cols-4 gap-2">
+            <button onclick="switchTab('apply')" id="tab-apply" class="tab-btn active py-3 px-2 rounded-2xl text-xs font-bold border transition flex flex-col items-center gap-1">
+                <span class="w-5 h-5 rounded-full badge-a text-[10px] flex items-center justify-center font-black">A</span>
+                <span class="truncate">Quick Launch</span>
+            </button>
+            <button onclick="switchTab('email')" id="tab-email" class="tab-btn py-3 px-2 rounded-2xl text-xs font-bold border transition flex flex-col items-center gap-1">
+                <span class="w-5 h-5 rounded-full badge-x text-[10px] flex items-center justify-center font-black">X</span>
+                <span class="truncate">Inbox Radar</span>
+            </button>
+            <button onclick="switchTab('resumes')" id="tab-resumes" class="tab-btn py-3 px-2 rounded-2xl text-xs font-bold border transition flex flex-col items-center gap-1">
+                <span class="w-5 h-5 rounded-full badge-y text-[10px] flex items-center justify-center font-black">Y</span>
+                <span class="truncate">Armory</span>
+            </button>
+            <button onclick="switchTab('profile')" id="tab-profile" class="tab-btn py-3 px-2 rounded-2xl text-xs font-bold border transition flex flex-col items-center gap-1">
+                <span class="w-5 h-5 rounded-full badge-b text-[10px] flex items-center justify-center font-black">B</span>
+                <span class="truncate">Spartan ID</span>
+            </button>
+        </div>
+
+        <!-- TAB 1: QUICK LAUNCH (A) -->
+        <div id="view-apply" class="space-y-4">
+            <div class="xbox-tile p-5 rounded-3xl space-y-3.5">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-black text-white flex items-center gap-2 uppercase tracking-wide">
+                        <span class="text-[#2ecc71]">⚡</span> Direct Mission Deployment
+                    </h3>
+                    <span class="text-[10px] bg-[#107c10]/20 text-[#2ecc71] px-2.5 py-0.5 rounded-full border border-[#107c10]/30 font-bold">100% PRIVATE</span>
+                </div>
+                <p class="text-xs text-zinc-400">Received a Google Form or placement portal link via WhatsApp or email? Paste it here to deploy Gemini:</p>
+
+                <div class="space-y-2.5">
+                    <input type="url" id="quickLink" placeholder="https://forms.gle/... or career portal link" class="w-full bg-zinc-950/90 border border-zinc-700/80 rounded-2xl p-3.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#107c10] focus:ring-1 focus:ring-[#107c10] font-mono">
+                    
+                    <button onclick="triggerQuickApply()" class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 active:scale-95 rounded-2xl font-black text-xs text-white shadow-lg shadow-blue-900/30 transition flex items-center justify-center gap-2 uppercase tracking-wider">
+                        <span>🚀 Launch Auto-Apply Sequence</span>
                     </button>
                 </div>
             </div>
-
-            <!-- Stats Bar -->
-            <div class="grid grid-cols-2 gap-3">
-                <div class="glass-card p-3 rounded-2xl text-center">
-                    <div class="text-[11px] text-slate-400">Total Applied</div>
-                    <div id="statApplied" class="text-2xl font-black text-blue-400">0</div>
-                </div>
-                <div class="glass-card p-3 rounded-2xl text-center">
-                    <div class="text-[11px] text-slate-400">Resumes Loaded</div>
-                    <div id="statResumes" class="text-2xl font-black text-indigo-400">0</div>
-                </div>
-            </div>
         </div>
 
-        <!-- TAB 2: EMAIL & SUBJECT CHECKER -->
+        <!-- TAB 2: INBOX RADAR & COMMS (X) -->
         <div id="view-email" class="hidden space-y-4">
-
-            <!-- Gmail Connection (Read-Only) -->
-            <div class="glass-card p-4 rounded-3xl space-y-3 border border-emerald-500/30">
+            
+            <!-- Gmail Connection (Strictly Read-Only) -->
+            <div class="xbox-tile p-5 rounded-3xl space-y-3.5 border border-emerald-500/30">
                 <div class="flex items-center justify-between">
-                    <h3 class="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
-                        <span>🔒</span> Connect Placement Gmail (Read-Only)
+                    <h3 class="text-sm font-black text-emerald-400 flex items-center gap-2 uppercase tracking-wide">
+                        <span>🔒</span> Inbox Comms Link (Read-Only)
                     </h3>
-                    <span id="gmailBadge" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-medium">Checking...</span>
+                    <span id="gmailBadge" class="text-[10px] bg-zinc-800 text-zinc-400 px-2.5 py-0.5 rounded-full font-bold">CHECKING...</span>
                 </div>
-                <div id="gmailConnectedInfo" class="text-xs text-slate-400">
-                    The bot reads only incoming placement emails. It has <strong>no permission or ability to send emails</strong> or modify your account.
+                <div id="gmailConnectedInfo" class="text-xs text-zinc-300 bg-zinc-950/60 p-3 rounded-2xl border border-white/5">
+                    Zero sending permissions. The bot only monitors incoming emails matching your subject filter.
                 </div>
 
-                <div class="space-y-2.5 pt-1">
+                <div class="space-y-3 pt-1">
                     <div>
-                        <label class="text-[11px] text-slate-400 font-semibold uppercase">Gmail Address:</label>
-                        <input type="email" id="gmailUserInput" placeholder="e.g. name@gmail.com" class="w-full bg-slate-900/90 border border-slate-700 rounded-2xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500">
+                        <label class="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">Gmail Address:</label>
+                        <input type="email" id="gmailUserInput" placeholder="e.g. yourname@gmail.com" class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl p-3.5 text-xs text-white focus:outline-none focus:border-[#107c10]">
                     </div>
                     <div>
                         <div class="flex justify-between items-center mb-1">
-                            <label class="text-[11px] text-slate-400 font-semibold uppercase">16-Character App Password:</label>
-                            <a href="https://myaccount.google.com/apppasswords" target="_blank" class="text-[10px] text-blue-400 hover:underline">Get code from Google ↗</a>
+                            <label class="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">16-Character App Password:</label>
+                            <a href="https://myaccount.google.com/apppasswords" target="_blank" class="text-[10px] text-emerald-400 hover:underline font-semibold">Generate in Google ↗</a>
                         </div>
-                        <input type="password" id="gmailPassInput" placeholder="e.g. abcd efgh ijkl mnop" class="w-full bg-slate-900/90 border border-slate-700 rounded-2xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono">
+                        <input type="password" id="gmailPassInput" placeholder="cfqb qwme nxnd bqwu" class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl p-3.5 text-xs text-white focus:outline-none focus:border-[#107c10] font-mono">
                     </div>
-                    <button onclick="saveGmailAuth()" id="btnSaveGmail" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 rounded-2xl font-bold text-xs text-white shadow-lg transition flex items-center justify-center gap-2">
-                        <span>🔗</span> Connect & Test Inbox
+                    <button onclick="saveGmailAuth()" id="btnSaveGmail" class="w-full py-3.5 bg-gradient-to-r from-[#107c10] to-[#15803d] hover:brightness-110 active:scale-95 rounded-2xl font-black text-xs text-white shadow-lg transition flex items-center justify-center gap-2 uppercase tracking-wider">
+                        <span>🔗 Connect & Test Comms</span>
                     </button>
                 </div>
             </div>
 
-            <!-- Placement Email Subject Filter -->
-            <div class="glass-card p-4 rounded-3xl space-y-3">
+            <!-- Subject Filter Keywords -->
+            <div class="xbox-tile p-5 rounded-3xl space-y-3">
                 <div class="flex items-center justify-between">
-                    <h3 class="text-sm font-bold text-amber-400 flex items-center gap-1.5">
-                        <span>📧</span> Placement Email Subject Filter
+                    <h3 class="text-sm font-black text-amber-400 flex items-center gap-2 uppercase tracking-wide">
+                        <span>📡</span> Subject Filter Keywords
                     </h3>
                 </div>
-                <p class="text-xs text-slate-400">The bot searches your placement emails for this exact subject phrase. You can check or change it anytime:</p>
+                <p class="text-xs text-zinc-400">Patrols your inbox for placement drives containing these keywords:</p>
 
                 <div class="space-y-2">
-                    <label class="text-[11px] text-slate-400 font-semibold uppercase">Monitored Subject(s) / Keywords (Comma-separated):</label>
                     <div class="flex gap-2">
-                        <input type="text" id="subjectInput" placeholder="god bless you, Placement, Offcampus" class="flex-1 bg-slate-900/90 border border-slate-700 rounded-2xl p-3 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-500">
-                        <button onclick="saveSubject()" class="bg-amber-600 hover:bg-amber-500 active:scale-95 px-4 rounded-2xl text-xs font-bold text-white transition">
+                        <input type="text" id="subjectInput" placeholder="god bless you, Placement, Offcampus" class="flex-1 bg-zinc-950 border border-zinc-700 rounded-2xl p-3 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-500">
+                        <button onclick="saveSubject()" class="bg-amber-600 hover:bg-amber-500 active:scale-95 px-5 rounded-2xl text-xs font-black text-white transition uppercase">
                             Save
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-slate-900/60 p-3 rounded-2xl border border-slate-800 text-[11px] text-slate-400 space-y-1">
-                    <div class="text-slate-300 font-semibold">💡 Multi-Job Intelligence:</div>
-                    <div>• <strong>Multiple Keywords:</strong> Separate with commas (e.g. <code class="text-amber-300">god bless you, Placement, Offcampus, Drive</code>)</div>
-                    <div>• <strong>Bundle Detection:</strong> If a single email contains <strong>multiple job openings</strong> (e.g. Infosys + Cognizant in 1 digest), Gemini extracts and applies to <strong>ALL of them</strong>!</div>
+                <div class="bg-zinc-950/80 p-3 rounded-2xl border border-white/5 text-[11px] text-zinc-400 space-y-1">
+                    <div class="text-zinc-200 font-bold">💡 Multi-Opening Radar:</div>
+                    <div>• If a single email contains multiple job openings, Gemini extracts and applies to <strong>every single one</strong>!</div>
                 </div>
             </div>
         </div>
 
-        <!-- TAB 3: RESUME MANAGER -->
+        <!-- TAB 3: ARMORY / RESUMES (Y) -->
         <div id="view-resumes" class="hidden space-y-4">
-            <div class="glass-card p-4 rounded-3xl space-y-3">
-                <h3 class="text-sm font-bold text-indigo-400 flex items-center gap-1.5">
-                    <span>📄</span> Tailored Resumes Catalog
+            <div class="xbox-tile p-5 rounded-3xl space-y-3.5">
+                <h3 class="text-sm font-black text-indigo-400 flex items-center gap-2 uppercase tracking-wide">
+                    <span>⚔️</span> Tailored Loadouts (Resumes)
                 </h3>
-                <p class="text-xs text-slate-400">Gemini automatically compares each job description and picks the winning resume from this list:</p>
+                <p class="text-xs text-zinc-400">Gemini inspects the job description and equips the winning loadout automatically:</p>
 
-                <div id="resumesList" class="space-y-1.5 text-xs font-mono">
-                    Loading resumes...
+                <div id="resumesList" class="space-y-2 text-xs font-mono">
+                    Scanning loadouts...
                 </div>
 
-                <div class="pt-2 border-t border-slate-800 space-y-2">
-                    <label class="text-[11px] text-slate-400 font-semibold">Upload New Resume (with role tag):</label>
+                <div class="pt-3 border-t border-white/5 space-y-2.5">
+                    <label class="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">Equip New Loadout PDF:</label>
                     <div class="grid grid-cols-3 gap-2">
-                        <select id="resumeTag" class="col-span-1 bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-white">
+                        <select id="resumeTag" class="col-span-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-xs text-white">
                             <option value="sde">SDE / Dev</option>
                             <option value="data_analyst">Data Analyst</option>
                             <option value="web_dev">Frontend</option>
                             <option value="core">General</option>
                         </select>
-                        <label class="col-span-2 block py-2 px-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-center text-xs font-bold cursor-pointer transition">
+                        <label class="col-span-2 block py-2.5 px-3 bg-indigo-600 hover:bg-indigo-500 active:scale-95 rounded-xl text-center text-xs font-black cursor-pointer transition uppercase tracking-wide">
                             <span>📤 Choose PDF</span>
                             <input type="file" id="resumeFileInput" accept=".pdf" class="hidden" onchange="uploadResumeFile()">
                         </label>
@@ -545,55 +663,58 @@ def mobile_ui():
             </div>
         </div>
 
-        <!-- TAB 4: PROFILE DETAILS -->
+        <!-- TAB 4: SPARTAN ID / PROFILE (B) -->
         <div id="view-profile" class="hidden space-y-4">
-            <div class="glass-card p-4 rounded-3xl space-y-3">
+            <div class="xbox-tile p-5 rounded-3xl space-y-3.5">
                 <div class="flex justify-between items-center">
-                    <h3 class="text-sm font-bold text-slate-200">Personal & Academic Details</h3>
-                    <button onclick="saveProfileData()" class="px-3 py-1 bg-blue-600 text-xs font-bold rounded-xl hover:bg-blue-500">
+                    <h3 class="text-sm font-black text-white uppercase tracking-wide">Spartan Identity Card</h3>
+                    <button onclick="saveProfileData()" class="px-4 py-1.5 bg-[#107c10] hover:bg-[#15803d] text-xs font-black rounded-xl text-white shadow-md uppercase">
                         💾 Save
                     </button>
                 </div>
 
-                <div class="space-y-2 text-xs">
+                <div class="space-y-2.5 text-xs">
                     <div>
-                        <label class="text-slate-400">Full Name</label>
-                        <input type="text" id="profName" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white">
+                        <label class="text-zinc-400 font-semibold">Candidate Full Name</label>
+                        <input type="text" id="profName" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-white">
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <div>
-                            <label class="text-slate-400">CGPA / %</label>
-                            <input type="text" id="profCgpa" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white">
+                            <label class="text-zinc-400 font-semibold">CGPA / %</label>
+                            <input type="text" id="profCgpa" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-white font-mono">
                         </div>
                         <div>
-                            <label class="text-slate-400">Passing Year</label>
-                            <input type="text" id="profYear" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white">
+                            <label class="text-zinc-400 font-semibold">Passing Year</label>
+                            <input type="text" id="profYear" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-white font-mono">
                         </div>
                     </div>
                     <div>
-                        <label class="text-slate-400">Roll Number</label>
-                        <input type="text" id="profRoll" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white">
+                        <label class="text-zinc-400 font-semibold">Roll Number</label>
+                        <input type="text" id="profRoll" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-white font-mono">
                     </div>
                     <div>
-                        <label class="text-slate-400">Phone</label>
-                        <input type="text" id="profPhone" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white">
+                        <label class="text-zinc-400 font-semibold">Phone Number</label>
+                        <input type="text" id="profPhone" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-white font-mono">
                     </div>
                     <div>
-                        <label class="text-slate-400">LinkedIn URL</label>
-                        <input type="text" id="profLinkedin" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white">
+                        <label class="text-zinc-400 font-semibold">LinkedIn Profile URL</label>
+                        <input type="text" id="profLinkedin" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-white">
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Live Activity Logs -->
-        <div class="glass-card p-4 rounded-3xl space-y-2">
+        <!-- Xbox Community / Activity Feed (Live Logs) -->
+        <div class="xbox-tile p-5 rounded-3xl space-y-2.5 border border-white/5">
             <div class="flex justify-between items-center">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Live Activity Log</h3>
-                <button onclick="fetchLogs()" class="text-[11px] text-blue-400 hover:underline">Refresh</button>
+                <h3 class="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-[#107c10]"></span>
+                    Live Activity Feed
+                </h3>
+                <button onclick="fetchLogs()" class="text-xs text-[#2ecc71] hover:underline font-bold">Refresh</button>
             </div>
-            <div id="logsBox" class="bg-slate-950/80 p-3 rounded-2xl text-[11px] font-mono text-slate-300 max-h-36 overflow-y-auto space-y-1 border border-slate-800">
-                Loading activity logs...
+            <div id="logsBox" class="bg-zinc-950/90 p-3.5 rounded-2xl text-[11px] font-mono text-zinc-300 max-h-40 overflow-y-auto space-y-1.5 border border-white/5">
+                Patrolling activity stream...
             </div>
         </div>
 
@@ -602,15 +723,41 @@ def mobile_ui():
     <script>
         let currentProfile = {};
 
+        // Xbox SFX Synth (Pure Web Audio API)
+        function playXboxChime() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+                osc.frequency.exponentialRampToValueAtTime(659.25, audioCtx.currentTime + 0.15); // E5
+                gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.35);
+            } catch(e) {}
+        }
+
+        function triggerAchievementToast(title) {
+            playXboxChime();
+            const toast = document.getElementById('achievementToast');
+            document.getElementById('achievementTitle').innerText = title;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 4000);
+        }
+
         function switchTab(tabId) {
             ['apply', 'email', 'resumes', 'profile'].forEach(t => {
                 document.getElementById('view-' + t).classList.add('hidden');
-                document.getElementById('tab-' + t).classList.remove('tab-active');
-                document.getElementById('tab-' + t).classList.add('text-slate-400');
+                document.getElementById('tab-' + t).classList.remove('active');
             });
             document.getElementById('view-' + tabId).classList.remove('hidden');
-            document.getElementById('tab-' + tabId).classList.add('tab-active');
-            document.getElementById('tab-' + tabId).classList.remove('text-slate-400');
+            document.getElementById('tab-' + tabId).classList.add('active');
         }
 
         async function fetchStatus() {
@@ -621,32 +768,31 @@ def mobile_ui():
                 const badge = document.getElementById('liveBadge');
                 const topStatus = document.getElementById('topStatus');
                 if (data.is_running) {
-                    badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span>RUNNING</span>';
-                    badge.className = 'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                    badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-[#107c10] animate-pulse"></span><span>PATROLLING</span>';
+                    badge.className = 'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#107c10]/20 text-[#2ecc71] border border-[#107c10]/40';
                 } else {
-                    badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span>STOPPED</span>';
-                    badge.className = 'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/30';
+                    badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span>STANDBY</span>';
+                    badge.className = 'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30';
                 }
 
                 topStatus.innerText = data.status_text || 'Ready';
                 document.getElementById('statApplied').innerText = data.stats.applied_count || 0;
                 document.getElementById('statResumes').innerText = data.resumes_count || 0;
-                document.getElementById('lastCheckTime').innerText = 'Last: ' + (data.last_run || '--:--');
+                document.getElementById('lastCheckTime').innerText = 'Patrol: ' + (data.last_run || '--:--');
 
-                // Render resumes list
+                // Render resumes catalog
                 const rList = document.getElementById('resumesList');
                 if (data.resumes_list && data.resumes_list.length > 0) {
                     rList.innerHTML = data.resumes_list.map(r => `
-                        <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/60 border border-slate-800">
-                            <span class="text-indigo-300">📄 ${r}</span>
-                            <span class="text-[10px] text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full">Ready</span>
+                        <div class="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/70 border border-white/5">
+                            <span class="text-zinc-200">⚔️ ${r}</span>
+                            <span class="text-[10px] text-[#2ecc71] bg-[#107c10]/20 border border-[#107c10]/30 px-2 py-0.5 rounded-full font-bold">EQUIPPED</span>
                         </div>
                     `).join('');
                 } else {
-                    rList.innerText = 'No resumes in resumes/ folder';
+                    rList.innerText = 'No loadouts found in resumes/ folder';
                 }
 
-                // Update subject input if not focused
                 if (document.activeElement !== document.getElementById('subjectInput')) {
                     document.getElementById('subjectInput').value = data.active_subject || 'god bless you';
                 }
@@ -657,6 +803,7 @@ def mobile_ui():
 
         async function startBot() {
             await fetch('/api/start', { method: 'POST' });
+            triggerAchievementToast('Auto-Pilot Scanner Engaged!');
             fetchStatus();
         }
 
@@ -673,7 +820,7 @@ def mobile_ui():
                 body: JSON.stringify({ subject: sub })
             });
             const data = await res.json();
-            alert(data.message || 'Subject updated!');
+            triggerAchievementToast('Filter Updated: ' + sub);
             fetchStatus();
         }
 
@@ -684,7 +831,7 @@ def mobile_ui():
                 alert('Please paste a job or Google Form link first!');
                 return;
             }
-            alert('🚀 Triggered Auto-Apply! The bot is opening Chrome and filling the form now.');
+            triggerAchievementToast('Mission Launched: Auto-Applying!');
             try {
                 await fetch('/api/quick_apply', {
                     method: 'POST',
@@ -709,7 +856,7 @@ def mobile_ui():
 
             const res = await fetch('/api/upload_resume', { method: 'POST', body: formData });
             const data = await res.json();
-            alert(data.message || 'Resume uploaded!');
+            triggerAchievementToast('New Loadout Equipped: ' + tag);
             fetchStatus();
         }
 
@@ -742,13 +889,12 @@ def mobile_ui():
             currentProfile.academics.roll_number = document.getElementById('profRoll').value;
             currentProfile.links.linkedin = document.getElementById('profLinkedin').value;
 
-            const res = await fetch('/api/profile', {
+            await fetch('/api/profile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(currentProfile)
             });
-            const data = await res.json();
-            alert(data.message || 'Profile saved!');
+            triggerAchievementToast('Spartan Profile Synchronized!');
         }
 
         async function fetchLogs() {
@@ -756,9 +902,9 @@ def mobile_ui():
             const data = await res.json();
             const box = document.getElementById('logsBox');
             if (data.logs && data.logs.length > 0) {
-                box.innerHTML = data.logs.map(l => `<div class="border-b border-slate-800 pb-1 text-slate-300">${l}</div>`).join('');
+                box.innerHTML = data.logs.map(l => `<div class="border-b border-white/5 pb-1 text-zinc-300">🎮 ${l}</div>`).join('');
             } else {
-                box.innerText = 'No applications logged yet.';
+                box.innerText = 'No patrol events recorded yet.';
             }
         }
 
@@ -771,16 +917,16 @@ def mobile_ui():
                 const btn = document.getElementById('btnSaveGmail');
 
                 if (data.authenticated && data.email) {
-                    badge.innerText = 'CONNECTED';
-                    badge.className = 'text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-medium border border-emerald-500/30';
-                    info.innerHTML = `✅ <strong>Connected:</strong> <span class="font-mono text-emerald-300">${data.email}</span> (${data.method})<br><span class="text-[11px] text-slate-400">Strictly Read-Only: Inbox scanning for placement emails is active.</span>`;
+                    badge.innerText = 'SECURE LINK ACTIVE';
+                    badge.className = 'text-[10px] bg-[#107c10]/20 text-[#2ecc71] px-2.5 py-0.5 rounded-full font-bold border border-[#107c10]/40';
+                    info.innerHTML = `✅ <strong>Connected:</strong> <span class="font-mono text-[#2ecc71]">${data.email}</span> (${data.method})<br><span class="text-[11px] text-zinc-400">Read-Only Shield: Placement email monitoring active.</span>`;
                     document.getElementById('gmailUserInput').value = data.email;
-                    btn.innerHTML = '<span>🔄</span> Update Connection';
+                    btn.innerHTML = '<span>🔄 Re-verify Connection</span>';
                 } else {
-                    badge.innerText = 'NOT CONNECTED';
-                    badge.className = 'text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-medium border border-amber-500/30';
+                    badge.innerText = 'UNLINKED';
+                    badge.className = 'text-[10px] bg-amber-500/20 text-amber-400 px-2.5 py-0.5 rounded-full font-bold border border-amber-500/30';
                     info.innerHTML = `Enter your Gmail and 16-character App Password below. <strong>Zero emails will ever be sent. Read-only inbox scanning only.</strong>`;
-                    btn.innerHTML = '<span>🔗</span> Connect & Test Inbox';
+                    btn.innerHTML = '<span>🔗 Connect & Test Comms</span>';
                 }
             } catch (e) {
                 console.error(e);
@@ -795,7 +941,7 @@ def mobile_ui():
                 return;
             }
             const btn = document.getElementById('btnSaveGmail');
-            btn.innerText = '⏳ Verifying IMAP Connection...';
+            btn.innerText = '⏳ Verifying IMAP Comms...';
             try {
                 const res = await fetch('/api/auth/connect_gmail', {
                     method: 'POST',
@@ -805,15 +951,15 @@ def mobile_ui():
                 const data = await res.json();
                 if (!res.ok) {
                     alert('⚠️ ' + (data.detail || 'Connection failed'));
-                    btn.innerHTML = '<span>🔗</span> Try Again';
+                    btn.innerHTML = '<span>🔗 Try Again</span>';
                     return;
                 }
-                alert('🎉 ' + data.message);
+                triggerAchievementToast('Gmail Comms Secured!');
                 checkGmailStatus();
                 fetchStatus();
             } catch (err) {
                 alert('Error: ' + err);
-                btn.innerHTML = '<span>🔗</span> Connect & Test Inbox';
+                btn.innerHTML = '<span>🔗 Connect & Test Comms</span>';
             }
         }
 
@@ -827,8 +973,7 @@ def mobile_ui():
         fetchLogs();
     </script>
 </body>
-</html>
-    """
+</html>"""
 
 if __name__ == "__main__":
     import socket

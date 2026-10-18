@@ -3,7 +3,7 @@
     "first_name": "Yash",
     "last_name": "",
     "full_name": "Yash",
-    "email": "your_email@gmail.com",
+    "email": "yash.23bce10699@vitbhopal.ac.in",
     "phone": "9650731278",
     "gender": "Male",
     "current_city": "Delhi NCR",
@@ -71,5 +71,8 @@
     "strengths": "Fast learner, disciplined problem solver, and strong team collaborator.",
     "authorized_to_work_in_india": "Yes",
     "need_visa_sponsorship": "No"
+  },
+  "email_settings": {
+    "subject_filter": "god bless you"
   }
 }
