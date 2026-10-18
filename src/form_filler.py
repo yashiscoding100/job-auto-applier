@@ -230,9 +230,24 @@ FORM FIELDS FOUND ON SCREEN:
 {json.dumps(fields, indent=2)}
 ---
 
-RULES:
+RULES & INTELLIGENCE:
 1. For Resume/CV uploads, use action "upload" with the exact selected resume path: "{str(resume_path).replace(os.sep, '/')}".
-2. For subjective pitch questions ("Why join us?", "Describe your strengths"), write an impressive, concise response based on Yash's profile.
+
+2. SUBJECTIVE & BEHAVIORAL QUESTIONS INTELLIGENCE (CRITICAL):
+   When encountering questions such as:
+   - "Why are you fit for this role?" / "Why should we hire you?"
+   - "Why do you want to join this company?"
+   - "What are your core technical strengths?"
+   - "Describe a challenging technical project or bug you solved"
+   - "Where do you see yourself in 3 years?"
+   - "Are you comfortable with night shifts / relocation / rotational shifts?"
+   
+   You MUST dynamically compose a tailored, compelling, recruiter-winning response:
+   - Specifically mention how Yash's CS background and engineering mindset align with this exact company and role.
+   - For fit/pitch questions: emphasize solid fundamentals in algorithms, clean code architecture, rapid adaptability, and excitement to make an immediate positive impact on their team.
+   - For relocation/shifts/notice period questions: answer positively and enthusiastically (e.g. "Immediate joining / 0 days notice period", "100% willing to relocate").
+   - Length: 2 to 4 crisp, high-impact professional sentences (40-75 words). No generic robotic templates.
+
 3. For dropdowns/radios, pick the best matching option from the available options.
 4. For phone numbers, match 10 digits or standard format as requested.
 5. If a field cannot be matched or is irrelevant/optional, set action to "skip".
@@ -242,7 +257,7 @@ Each object must have:
 - "id": string (the exact data-ai-id, e.g. "ai-field-1")
 - "action": "fill" | "select" | "click" | "upload" | "skip"
 - "value": string value to type / option / file path
-- "reason": brief explanation (e.g. "Mapped to CGPA")
+- "reason": brief explanation (e.g. "Tailored pitch for SDE role")
 
 Only output raw JSON. Do not include markdown codeblocks or explanation.
 """
