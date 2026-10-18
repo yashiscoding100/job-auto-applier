@@ -43,6 +43,24 @@ class AIFormFiller:
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
         self._init_log_file()
 
+    def call_gemini_with_retry(self, prompt: str, max_retries: int = 3) -> str:
+        """Calls Gemini API with automatic retry on temporary high-traffic 503 errors."""
+        for attempt in range(max_retries):
+            try:
+                res = self.ai_client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt
+                )
+                return res.text
+            except Exception as e:
+                if ("503" in str(e) or "UNAVAILABLE" in str(e)) and attempt < max_retries - 1:
+                    wait_time = 2 * (attempt + 1)
+                    print(f"[Gemini 503 Traffic Spike]: Retrying in {wait_time}s (Attempt {attempt + 1}/{max_retries})...")
+                    time.sleep(wait_time)
+                else:
+                    raise e
+        return ""
+
     def select_best_resume(self, company: str, role: str, page_content: str) -> Path:
         """
         Uses Gemini 3.8 Flash to analyze the Job Description / Role and pick
@@ -93,11 +111,8 @@ Return a strictly valid JSON object with:
 Only output raw JSON. Do not include markdown or explanation.
 """
         try:
-            res = self.ai_client.models.generate_content(
-                model=self.model_name,
-                contents=prompt
-            )
-            cleaned = res.text.strip()
+            text_res = self.call_gemini_with_retry(prompt)
+            cleaned = text_res.strip()
             if cleaned.startswith("```"):
                 cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
                 cleaned = re.sub(r"\s*```$", "", cleaned)
@@ -272,13 +287,9 @@ Each object must have:
 
 Only output raw JSON. Do not include markdown codeblocks or explanation.
 """
-        response = self.ai_client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-        )
-
         try:
-            cleaned = response.text.strip()
+            text_res = self.call_gemini_with_retry(prompt)
+            cleaned = text_res.strip()
             if cleaned.startswith("```"):
                 cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
                 cleaned = re.sub(r"\s*```$", "", cleaned)
@@ -354,6 +365,109 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
 
         return filled_count
 
+    def consult_gemini_to_navigate_or_unblock(self, page: Page, company: str, role: str, issue_description: str) -> bool:
+        """
+        Self-Healing AI Agent: If the bot gets stuck, detects no fields, or encounters an unusual portal layout,
+        it consults Gemini 3.8 Flash with the full interactive page state to deduce what to click or do next.
+        """
+        print(f"\n🧠 [AI AGENT CONSULTATION]: Consulting Gemini to analyze page & navigate...")
+        print(f"   Context: {issue_description}")
+
+        # Extract all visible interactive elements (buttons, links, tabs)
+        js_get_interactives = """
+        () => {
+            const items = [];
+            const clickable = document.querySelectorAll('button, a, div[role="button"], span[role="button"], input[type="submit"], input[type="button"]');
+            clickable.forEach((el, i) => {
+                if (el.offsetParent !== null && el.innerText.trim().length > 0 && el.innerText.trim().length < 60) {
+                    items.push({
+                        text: el.innerText.trim(),
+                        tag: el.tagName.toLowerCase(),
+                        role: el.getAttribute('role') || '',
+                        aria: el.getAttribute('aria-label') || ''
+                    });
+                }
+            });
+            return items.slice(0, 35); // top 35 visible interactive options
+        }
+        """
+        try:
+            interactives = page.evaluate(js_get_interactives)
+            page_snippet = page.inner_text("body")[:3000]
+        except Exception:
+            interactives = []
+            page_snippet = ""
+
+        prompt = f"""
+You are an Autonomous AI Browser Navigation Agent.
+The automated job application bot is currently stuck or encountering an unusual portal layout.
+
+Target Job: {company} - {role}
+Current URL: {page.url}
+Page Title: {page.title()}
+Detected Issue: {issue_description}
+
+VISIBLE CLICKABLE ELEMENTS ON SCREEN:
+---
+{json.dumps(interactives, indent=2)}
+---
+
+PAGE TEXT SNIPPET:
+---
+{page_snippet}
+---
+
+TASK:
+Examine the page. What is the single best button, link, or tab to click to proceed with applying for this job (e.g. "Apply Now", "Register for Drive", "Student Sign In", "Proceed to Form", "Next", "Continue")?
+If scrolling down is needed to reveal the form, tell the browser to scroll.
+
+Return a strictly valid JSON object:
+{{
+  "diagnosis": "1-sentence explanation of what is needed on this page",
+  "action": "click" | "scroll_down" | "none",
+  "click_text": "Exact text of the button/link to click (or null if none)",
+  "selector": "CSS or text selector like 'button:has-text(\"Apply\")'"
+}}
+
+Only output raw JSON. Do not include markdown codeblocks or explanation.
+"""
+        try:
+            text_res = self.call_gemini_with_retry(prompt)
+            cleaned = text_res.strip()
+            if cleaned.startswith("```"):
+                cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+                cleaned = re.sub(r"\s*```$", "", cleaned)
+            data = json.loads(cleaned)
+
+            print(f"   💡 Gemini Diagnosis: {data.get('diagnosis')}")
+            action = data.get("action")
+            click_text = data.get("click_text")
+
+            if action == "scroll_down":
+                page.evaluate("window.scrollBy(0, 500)")
+                time.sleep(2)
+                return True
+            elif action == "click" and click_text:
+                target = page.locator(f'text="{click_text}"').first
+                if target.count() > 0:
+                    print(f"   👉 Gemini commanded click on: '{click_text}'")
+                    target.scroll_into_view_if_needed()
+                    target.click()
+                    time.sleep(3)
+                    return True
+                else:
+                    # Fallback to selector
+                    sel = data.get("selector")
+                    if sel and page.locator(sel).count() > 0:
+                        print(f"   👉 Gemini commanded click on selector: {sel}")
+                        page.locator(sel).first.click()
+                        time.sleep(3)
+                        return True
+        except Exception as e:
+            print(f"[Error in Gemini consultation]: {e}")
+
+        return False
+
     def apply_to_job(self, apply_url: str, company: str = "Unknown", role: str = "Unknown", auto_submit: bool = False, headless: bool = True):
         """
         End-to-End Multi-Page Job Application Engine.
@@ -414,6 +528,18 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
 
                     print(f"\n--- [Page {page_num}] Scanning Form Elements ---")
                     filled = self.fill_current_page_fields(page, resume_path=selected_resume)
+
+                    # Self-Healing: If 0 fields detected on initial page, consult Gemini!
+                    if filled == 0 and page_num == 1:
+                        print("⚠️ No fields detected automatically. Consulting Gemini to analyze page & find application form...")
+                        unblocked = self.consult_gemini_to_navigate_or_unblock(
+                            page, company=company, role=role,
+                            issue_description="No interactive form fields found on page. Identify button, link, or tab to open the application."
+                        )
+                        if unblocked:
+                            time.sleep(3)
+                            filled = self.fill_current_page_fields(page, resume_path=selected_resume)
+
                     time.sleep(1)
 
                     # Look for Next or Submit buttons
