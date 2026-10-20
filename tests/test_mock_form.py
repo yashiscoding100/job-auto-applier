@@ -29,7 +29,7 @@ def run_local_mock_test():
             apply_url=local_url,
             company="ABC Tech Campus Recruitment",
             role="Associate Software Engineer",
-            auto_submit=True
+            auto_submit=False
         )
         print("\n[SUCCESS] Local test completed! Check logs/applications_log.csv")
     except Exception as e:

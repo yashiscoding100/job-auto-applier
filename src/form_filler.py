@@ -11,10 +11,10 @@ from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright, Page, Locator
 from google import genai
 
-# Ensure UTF-8 console output on Windows
+# Ensure UTF-8 and unbuffered console output on Windows
 if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
     except Exception:
         pass
 
@@ -75,8 +75,8 @@ class AIFormFiller:
 
     def select_best_resume(self, company: str, role: str, page_content: str) -> Path:
         """
-        Uses Gemini 3.8 Flash to analyze the Job Description / Role and pick
-        the optimal tailored resume from the resumes/ folder.
+        Analyzes the Job Description / Role and picks
+        the optimal tailored resume from the resumes/ folder (fast heuristic first, Gemini fallback).
         """
         # Find all PDF files in resumes directory
         available_resumes = list(self.resumes_dir.glob("*.pdf"))
@@ -85,6 +85,24 @@ class AIFormFiller:
             return self.default_resume
         if len(available_resumes) == 1:
             return available_resumes[0]
+
+        # Fast direct matching for standard roles (<1ms)
+        role_lower = (role or "").lower()
+        if any(k in role_lower for k in ["sde", "software", "backend", "full stack", "fullstack", "developer", "engineer"]):
+            sde_path = self.resumes_dir / "resume_sde.pdf"
+            if sde_path.exists():
+                print(f"\n🧠 [AI RESUME MATCH]: Fast-matched '{sde_path.name}' for role '{role}'")
+                return sde_path
+        elif any(k in role_lower for k in ["data", "analyst", "analytics", "bi "]):
+            da_path = self.resumes_dir / "resume_data_analyst.pdf"
+            if da_path.exists():
+                print(f"\n🧠 [AI RESUME MATCH]: Fast-matched '{da_path.name}' for role '{role}'")
+                return da_path
+        elif any(k in role_lower for k in ["frontend", "web", "react", "ui", "javascript"]):
+            web_path = self.resumes_dir / "resume_web_developer.pdf"
+            if web_path.exists():
+                print(f"\n🧠 [AI RESUME MATCH]: Fast-matched '{web_path.name}' for role '{role}'")
+                return web_path
 
         catalog_info = self.profile.get("resumes", {})
         resumes_metadata = []
@@ -311,11 +329,90 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
             return []
 
     def human_type(self, locator: Locator, text: str):
-        """Types text with natural random keystroke delays to bypass bot detectors."""
-        locator.focus()
-        locator.clear()
-        for char in str(text):
-            locator.type(char, delay=random.randint(25, 65))
+        """Types text quickly and reliably, triggering input events."""
+        try:
+            locator.scroll_into_view_if_needed()
+            locator.focus()
+            locator.fill(str(text))
+        except Exception:
+            try:
+                locator.type(str(text), delay=20)
+            except Exception:
+                pass
+
+    def heuristic_match_field(self, field: Dict[str, Any], resume_path: Path) -> Optional[Dict[str, Any]]:
+        """Fast instant heuristic matcher for standard placement fields (0ms response)."""
+        label = (field.get("label") or "").lower()
+        name = (field.get("name") or "").lower()
+        tag = field.get("tag", "")
+        type_ = field.get("type", "")
+        options = field.get("options", [])
+        field_id = field.get("id")
+        
+        combined = f"{label} {name}"
+        
+        # 1. Resume / CV upload
+        if type_ == "file" or "resume" in combined or "cv" in combined:
+            return {"id": field_id, "action": "upload", "value": str(resume_path), "reason": "Equipping tailored resume PDF"}
+            
+        # 2. Full Name / First Name
+        if any(k in combined for k in ["full name", "your name", "candidate name", "cand_name", "first name", "name *"]):
+            return {"id": field_id, "action": "fill", "value": self.profile.get("personal", {}).get("full_name", "Yash"), "reason": "Filling candidate full name"}
+            
+        # 3. Email
+        if any(k in combined for k in ["email", "e-mail", "mail id"]):
+            return {"id": field_id, "action": "fill", "value": self.profile.get("personal", {}).get("email", ""), "reason": "Filling candidate email"}
+            
+        # 4. Mobile / Phone
+        if any(k in combined for k in ["phone", "mobile", "whatsapp", "contact"]):
+            return {"id": field_id, "action": "fill", "value": self.profile.get("personal", {}).get("phone", ""), "reason": "Filling 10-digit mobile number"}
+            
+        # 5. Roll number / Reg No
+        if any(k in combined for k in ["roll", "reg", "registration", "student id", "college id"]):
+            return {"id": field_id, "action": "fill", "value": self.profile.get("academics", {}).get("roll_number", ""), "reason": "Filling college roll number"}
+            
+        # 6. CGPA / Percentage
+        if any(k in combined for k in ["cgpa", "gpa", "aggregate", "percentage", "marks"]):
+            return {"id": field_id, "action": "fill", "value": str(self.profile.get("academics", {}).get("cgpa_or_percentage", "7.82")), "reason": "Filling aggregate CGPA"}
+            
+        # 7. Graduation year
+        if any(k in combined for k in ["graduat", "passing year", "passout", "batch", "year of pass"]):
+            target_year = str(self.profile.get("academics", {}).get("graduation_year", "2026"))
+            best_opt = target_year
+            if options:
+                for opt in options:
+                    if target_year in opt:
+                        best_opt = opt
+                        break
+                else:
+                    valid_opts = [o for o in options if any(char.isdigit() for char in o)]
+                    if valid_opts:
+                        best_opt = valid_opts[-1]
+            if tag == "select":
+                return {"id": field_id, "action": "select", "value": best_opt, "reason": "Selecting graduation year"}
+            else:
+                return {"id": field_id, "action": "fill", "value": best_opt, "reason": "Filling graduation year"}
+                
+        # 8. Branch / Stream
+        if any(k in combined for k in ["branch", "stream", "department", "degree", "specialization"]):
+            target_branch = self.profile.get("academics", {}).get("branch", "Computer Science & Engineering")
+            best_opt = target_branch
+            if options:
+                for opt in options:
+                    if "computer" in opt.lower() or "cse" in opt.lower():
+                        best_opt = opt
+                        break
+            if tag == "select":
+                return {"id": field_id, "action": "select", "value": best_opt, "reason": "Selecting academic branch"}
+            else:
+                return {"id": field_id, "action": "fill", "value": best_opt, "reason": "Filling academic branch"}
+                
+        # 9. Cover pitch / why fit
+        if any(k in combined for k in ["why", "interest", "pitch", "about yourself", "cover", "describe", "experience"]):
+            pitch = "I am a dedicated software engineer with strong fundamentals in data structures, algorithms, and full-stack development. I bring a structured problem-solving mindset and clean code architecture to ramp up fast and ship reliable features from Day 1."
+            return {"id": field_id, "action": "fill", "value": pitch, "reason": "Providing recruiter green-flag pitch"}
+            
+        return None
 
     def check_for_captcha(self, page: Page) -> bool:
         """Detects if Cloudflare or reCAPTCHA is present."""
@@ -332,13 +429,26 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
         return False
 
     def fill_current_page_fields(self, page: Page, resume_path: Path) -> int:
-        """Inspects, maps, and populates fields on the active page using the selected resume."""
+        """Inspects, maps, and populates fields on the active page using fast heuristics and Gemini."""
         fields = self.inspect_form_fields(page)
         if not fields:
             return 0
 
-        print(f"Found {len(fields)} interactive fields. Mapping with {self.model_name}...")
-        actions = self.generate_form_actions_with_gemini(fields, page.title(), resume_path=resume_path)
+        # Step 1: Fast Heuristic Match (Instant 0ms response for standard fields)
+        actions = []
+        unmatched_fields = []
+        for f in fields:
+            matched = self.heuristic_match_field(f, resume_path)
+            if matched:
+                actions.append(matched)
+            else:
+                unmatched_fields.append(f)
+
+        # Step 2: Use Gemini for any remaining non-standard / custom questions
+        if unmatched_fields:
+            print(f"Found {len(unmatched_fields)} custom questions. Consulting Gemini...")
+            ai_actions = self.generate_form_actions_with_gemini(unmatched_fields, page.title(), resume_path=resume_path)
+            actions.extend(ai_actions)
 
         filled_count = 0
         for act in actions:
@@ -347,7 +457,7 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
             val = act.get("value")
             reason = act.get("reason", "")
 
-            if action_type == "skip" or not field_id:
+            if action_type == "skip" or not field_id or val is None:
                 continue
 
             locator = page.locator(f'[data-ai-id="{field_id}"]')
@@ -379,7 +489,6 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
                         print(f"     [Uploaded Tailored Resume]: {upload_file.name}")
                     else:
                         print(f"     [Warning]: Resume file not found at {upload_file}")
-                time.sleep(random.uniform(0.2, 0.4))
                 filled_count += 1
             except Exception as field_err:
                 print(f"     [Field Warning] on {field_id}: {field_err}")
@@ -516,30 +625,31 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
         except Exception:
             pass
 
-    def inject_debug_banner(self, page: Page):
-        """Injects a high-visibility Xbox neon banner inside the browser page confirming Debug Mode."""
+    def inject_banner(self, page: Page, text: str, bg_color: str = "#107c10", border_color: str = "#2ecc71"):
+        """Injects or updates a high-visibility Xbox neon banner inside the browser page reflecting live status."""
         try:
-            banner_js = """
-            if (!document.getElementById('jobbot-debug-banner')) {
-                const b = document.createElement('div');
+            banner_js = f"""
+            let b = document.getElementById('jobbot-debug-banner');
+            if (!b) {{
+                b = document.createElement('div');
                 b.id = 'jobbot-debug-banner';
                 b.style.position = 'fixed';
                 b.style.top = '0';
                 b.style.left = '0';
                 b.style.right = '0';
-                b.style.backgroundColor = '#107c10';
-                b.style.color = '#ffffff';
                 b.style.fontFamily = 'Segoe UI, sans-serif';
                 b.style.fontWeight = 'bold';
                 b.style.fontSize = '14px';
                 b.style.textAlign = 'center';
                 b.style.padding = '12px 20px';
                 b.style.zIndex = '99999999';
-                b.style.boxShadow = '0 4px 25px rgba(16, 124, 16, 0.7)';
-                b.style.borderBottom = '2px solid #2ecc71';
-                b.innerHTML = '🛡️ <strong>JOBBOT DEBUG MODE:</strong> All fields filled by AI! (Final Submit is paused for inspection — will NOT click Apply)';
+                b.style.boxShadow = '0 4px 25px rgba(0, 0, 0, 0.6)';
                 document.body.prepend(b);
-            }
+            }}
+            b.style.backgroundColor = '{bg_color}';
+            b.style.color = '#ffffff';
+            b.style.borderBottom = '2px solid {border_color}';
+            b.innerHTML = '{text}';
             """
             page.evaluate(banner_js)
         except Exception:
@@ -587,9 +697,9 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
 
             try:
                 page.goto(apply_url, timeout=60000, wait_until="domcontentloaded")
-                time.sleep(3)
+                time.sleep(2)
                 self.bring_window_to_foreground()
-                self.inject_debug_banner(page)
+                self.inject_banner(page, "⚡ <strong>JOBBOT ACTIVE:</strong> Inspecting form & preparing candidate profile...", "#b45309", "#f59e0b")
 
                 # Check if this form requires Google Account Sign-In (e.g. VIT Bhopal forms)
                 if "accounts.google.com" in page.url:
@@ -643,7 +753,7 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
                             time.sleep(1)
 
                     print(f"\n--- [Page {page_num}] Scanning Form Elements ---")
-                    self.inject_debug_banner(page)
+                    self.inject_banner(page, f"✍️ <strong>JOBBOT ACTIVE:</strong> Populating candidate details & equipping resume (Page {page_num})...", "#1d4ed8", "#3b82f6")
                     filled = self.fill_current_page_fields(page, resume_path=selected_resume)
 
                     # Self-Healing: If 0 fields detected on initial page, consult Gemini!
@@ -666,7 +776,7 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
                     # If this is the final submit step
                     if submit_btn and (not next_btn or page_num > 1):
                         print("\n🎯 Reached the Final Submit Step!")
-                        self.inject_debug_banner(page)
+                        self.inject_banner(page, "🛡️ <strong>JOBBOT DEBUG MODE:</strong> All fields filled by AI! (Final Submit is paused for inspection — will NOT click Apply)", "#107c10", "#2ecc71")
                         if auto_submit:
                             print("Auto-Submit is ON. Submitting Application...")
                             submit_btn.scroll_into_view_if_needed()
@@ -691,7 +801,7 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
                         time.sleep(3)
                     else:
                         print("No further 'Next' or 'Submit' buttons detected. Application completed.")
-                        self.inject_debug_banner(page)
+                        self.inject_banner(page, "🛡️ <strong>JOBBOT DEBUG MODE:</strong> Form complete! Review your details.", "#107c10", "#2ecc71")
                         time.sleep(30)
                         self.log_application(company, role, apply_url, "COMPLETED", f"No next button, used {selected_resume.name}")
                         break
@@ -705,8 +815,10 @@ Only output raw JSON. Do not include markdown codeblocks or explanation.
 
 if __name__ == "__main__":
     test_url = sys.argv[1] if len(sys.argv) > 1 else None
+    company_arg = sys.argv[2] if len(sys.argv) > 2 else "DHL Group"
+    role_arg = sys.argv[3] if len(sys.argv) > 3 else "AI / Software Engineer"
     if test_url:
         filler = AIFormFiller()
-        filler.apply_to_job(test_url, company="Manual Test", role="Software Engineer", auto_submit=False)
+        filler.apply_to_job(test_url, company=company_arg, role=role_arg, auto_submit=False)
     else:
-        print("Usage: python src/form_filler.py <job_application_url>")
+        print("Usage: python src/form_filler.py <job_application_url> [company] [role]")
